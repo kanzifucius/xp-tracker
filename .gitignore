@@ -1,0 +1,25 @@
+# Build output
+bin/
+/exporter
+
+# Go
+coverage.out
+coverage.html
+
+# MkDocs
+site/
+.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# mise local overrides
+.mise.local.toml
+
+# OS
+.DS_Store
+Thumbs.db

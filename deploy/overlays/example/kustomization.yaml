@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - servicemonitor.yaml
+
+# Override the namespace if your Prometheus Operator watches a different namespace.
+# namespace: monitoring
+
+# Example: patch the ConfigMap to set your actual GVRs.
+patches:
+  - target:
+      kind: ConfigMap
+      name: crossplane-metrics-exporter
+    patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: crossplane-metrics-exporter
+      data:
+        CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances,platform.example.org/v1alpha1/kafkatopics"
+        XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances,platform.example.org/v1alpha1/xkafkatopics"
+        CREATOR_ANNOTATION_KEY: "platform.example.org/created-by"
+        TEAM_ANNOTATION_KEY: "platform.example.org/team"
+        POLL_INTERVAL_SECONDS: "60"
+
+  # IMPORTANT: Scope the ClusterRole to only the API groups and resources your
+  # exporter actually needs.  The base grants read access to ALL resources.
+  - target:
+      kind: ClusterRole
+      name: crossplane-metrics-exporter
+    patch: |
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: crossplane-metrics-exporter
+      rules:
+        - apiGroups: ["platform.example.org"]
+          resources:
+            - postgresqlinstances
+            - xpostgresqlinstances
+            - kafkatopics
+            - xkafkatopics
+          verbs: ["get", "list", "watch"]
+
+# Example: override the container image.
+images:
+  - name: ghcr.io/kanzifucius/xp-tracker
+    newTag: v0.1.0

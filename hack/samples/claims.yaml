@@ -1,0 +1,113 @@
+# Sample Widget claims
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Widget
+metadata:
+  name: web-widget-1
+  namespace: team-alpha
+  annotations:
+    xptracker.dev/created-by: alice@example.com
+    xptracker.dev/team: platform
+spec:
+  parameters:
+    size: small
+  compositionRef:
+    name: widget-default
+---
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Widget
+metadata:
+  name: web-widget-2
+  namespace: team-alpha
+  annotations:
+    xptracker.dev/created-by: alice@example.com
+    xptracker.dev/team: platform
+spec:
+  parameters:
+    size: medium
+  compositionRef:
+    name: widget-default
+---
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Widget
+metadata:
+  name: api-widget-1
+  namespace: team-beta
+  annotations:
+    xptracker.dev/created-by: bob@example.com
+    xptracker.dev/team: backend
+spec:
+  parameters:
+    size: large
+  compositionRef:
+    name: widget-default
+---
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Widget
+metadata:
+  name: api-widget-2
+  namespace: team-beta
+  annotations:
+    xptracker.dev/created-by: carol@example.com
+    xptracker.dev/team: backend
+spec:
+  parameters:
+    size: small
+  compositionRef:
+    name: widget-default
+---
+# Sample Gadget claims
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Gadget
+metadata:
+  name: cache-gadget-1
+  namespace: team-alpha
+  annotations:
+    xptracker.dev/created-by: alice@example.com
+    xptracker.dev/team: platform
+spec:
+  parameters:
+    size: medium
+  compositionRef:
+    name: gadget-default
+---
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Gadget
+metadata:
+  name: cache-gadget-2
+  namespace: team-alpha
+  annotations:
+    xptracker.dev/created-by: dave@example.com
+    xptracker.dev/team: platform
+spec:
+  parameters:
+    size: small
+  compositionRef:
+    name: gadget-default
+---
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Gadget
+metadata:
+  name: ml-gadget-1
+  namespace: team-gamma
+  annotations:
+    xptracker.dev/created-by: eve@example.com
+    xptracker.dev/team: data
+spec:
+  parameters:
+    size: large
+  compositionRef:
+    name: gadget-default
+---
+apiVersion: samples.xptracker.dev/v1alpha1
+kind: Gadget
+metadata:
+  name: ml-gadget-2
+  namespace: team-gamma
+  annotations:
+    xptracker.dev/created-by: eve@example.com
+    xptracker.dev/team: data
+spec:
+  parameters:
+    size: medium
+  compositionRef:
+    name: gadget-default

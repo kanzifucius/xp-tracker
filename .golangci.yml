@@ -1,0 +1,27 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - exhaustive
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - noctx
+    - prealloc
+    - staticcheck
+    - unused
+
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+
+  exclusions:
+    presets: []
+
+formatters:
+  enable:
+    - gofmt
