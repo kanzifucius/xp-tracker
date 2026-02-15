@@ -1,0 +1,8 @@
+# Crossplane Function required by the sample Compositions (mode: Pipeline).
+# Apply this before compositions.yaml.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-patch-and-transform
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.7.0

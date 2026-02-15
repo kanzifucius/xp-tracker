@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane-metrics-exporter
+  labels:
+    app.kubernetes.io/name: crossplane-metrics-exporter
+    app.kubernetes.io/component: exporter
+rules:
+  # ============================================================================
+  # WARNING — PRODUCTION SECURITY NOTICE
+  # ============================================================================
+  # The default rules below grant read-only access to ALL resources in ALL API
+  # groups.  This is intentionally broad so the base works out-of-the-box with
+  # any Crossplane provider, but it violates the principle of least privilege.
+  #
+  # BEFORE deploying to production you MUST scope the rules to only the API
+  # groups and resources that match your CLAIM_GVRS and XR_GVRS configuration.
+  # See deploy/overlays/example/ for a properly-scoped ClusterRole patch.
+  #
+  # Example scoped rule:
+  #   - apiGroups: ["platform.example.org"]
+  #     resources: ["postgresqlinstances", "xpostgresqlinstances"]
+  #     verbs: ["get", "list", "watch"]
+  # ============================================================================
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]

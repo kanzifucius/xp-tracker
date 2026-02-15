@@ -1,0 +1,59 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: widget-default
+  labels:
+    crossplane.io/composition-name: widget-default
+spec:
+  compositeTypeRef:
+    apiVersion: samples.xptracker.dev/v1alpha1
+    kind: XWidget
+  mode: Pipeline
+  pipeline:
+    - step: create-nop
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: nop
+            base:
+              apiVersion: nop.crossplane.io/v1alpha1
+              kind: NopResource
+              spec:
+                forProvider:
+                  conditionAfter:
+                    - conditionType: Ready
+                      conditionStatus: "True"
+                      time: "0s"
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: gadget-default
+  labels:
+    crossplane.io/composition-name: gadget-default
+spec:
+  compositeTypeRef:
+    apiVersion: samples.xptracker.dev/v1alpha1
+    kind: XGadget
+  mode: Pipeline
+  pipeline:
+    - step: create-nop
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: nop
+            base:
+              apiVersion: nop.crossplane.io/v1alpha1
+              kind: NopResource
+              spec:
+                forProvider:
+                  conditionAfter:
+                    - conditionType: Ready
+                      conditionStatus: "True"
+                      time: "0s"

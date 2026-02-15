@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crossplane-metrics-exporter
+  labels:
+    app.kubernetes.io/name: crossplane-metrics-exporter
+    app.kubernetes.io/component: exporter
+data:
+  # Required: comma-separated claim GVRs in group/version/resource format.
+  CLAIM_GVRS: "example.org/v1alpha1/exampleclaims"
+
+  # Required: comma-separated XR GVRs in group/version/resource format.
+  XR_GVRS: "example.org/v1alpha1/examplecomposites"
+
+  # Optional: comma-separated namespace filter. Empty means all namespaces.
+  # KUBE_NAMESPACE_SCOPE: ""
+
+  # Optional: annotation key for claim creator attribution.
+  # CREATOR_ANNOTATION_KEY: "example.org/created-by"
+
+  # Optional: annotation key for team attribution.
+  # TEAM_ANNOTATION_KEY: "example.org/team"
+
+  # Optional: label key on XRs for composition name. Default: crossplane.io/composition-name
+  # COMPOSITION_LABEL_KEY: "crossplane.io/composition-name"
+
+  # Optional: seconds between polling cycles. Default: 30
+  POLL_INTERVAL_SECONDS: "30"
+
+  # Optional: listen address for HTTP metrics server. Default: :8080
+  METRICS_ADDR: ":8080"
+
+  # Optional: persistent store backend. Values: "memory" (default), "s3".
+  # STORE_BACKEND: "memory"
+
+  # Required when STORE_BACKEND=s3: S3 bucket name.
+  # S3_BUCKET: "my-xp-tracker-bucket"
+
+  # Optional: S3 key prefix for snapshot file. Default: "xp-tracker"
+  # S3_KEY_PREFIX: "xp-tracker"
+
+  # Optional: AWS region for S3 client. Default: "us-east-1"
+  # S3_REGION: "us-east-1"
+
+  # Optional: custom S3 endpoint for S3-compatible providers (MinIO, LocalStack).
+  # S3_ENDPOINT: "http://minio.minio.svc:9000"

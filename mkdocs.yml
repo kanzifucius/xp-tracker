@@ -1,0 +1,166 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+site_name: xp-tracker
+site_description: Prometheus metrics exporter for Crossplane claims and composite resources
+site_url: https://kanzifucius.github.io/xp-tracker
+site_author: Kanzi
+
+repo_name: kanzifucius/xp-tracker
+repo_url: https://github.com/kanzifucius/xp-tracker
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2025 Kanzi
+
+theme:
+  name: material
+  language: en
+  features:
+    # Navigation
+    - navigation.instant          # Instant loading (XHR)
+    - navigation.instant.progress # Loading progress indicator
+    - navigation.tracking         # URL updates with anchor
+    - navigation.tabs             # Top-level sections as tabs
+    - navigation.tabs.sticky      # Tabs remain visible when scrolling
+    - navigation.sections         # Top-level sections rendered as groups
+    - navigation.expand           # Expand all collapsible sections
+    - navigation.path             # Breadcrumb navigation
+    - navigation.top              # Back-to-top button
+    - navigation.footer           # Previous/next page links in footer
+    - navigation.indexes          # Section index pages
+    # Search
+    - search.suggest              # Search suggestions
+    - search.highlight            # Highlight search terms on page
+    - search.share                # Shareable search links
+    # Header
+    - header.autohide             # Auto-hide header on scroll
+    # Content
+    - content.tabs.link           # Link content tabs
+    - content.code.copy           # Copy button on code blocks
+    - content.code.select         # Line selection in code blocks
+    - content.code.annotate       # Code annotations
+    - content.action.edit         # Edit this page link
+    - content.action.view         # View source link
+    - content.tooltips            # Improved tooltips
+    # Table of contents
+    - toc.follow                  # TOC follows scroll position
+    - toc.integrate               # TOC integrated into navigation
+  palette:
+    # Palette toggle for automatic mode (follows system preference)
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/chart-line
+  custom_dir: docs/overrides
+
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - minify:
+      minify_html: true
+  - privacy           # GDPR compliance - proxies external assets
+  - tags              # Tag support for pages
+  - social            # Auto-generate social cards for sharing
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  # Version selector
+  version:
+    provider: mike
+    default: latest
+  # Social links in footer
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kanzifucius/xp-tracker
+      name: xp-tracker on GitHub
+  # Hide "Made with Material for MkDocs"
+  generator: false
+  # Status indicators for pages
+  status:
+    new: Recently added
+    deprecated: Deprecated
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+  - Configuration:
+      - Environment Variables: configuration/environment-variables.md
+      - Store Backends: configuration/store-backends.md
+  - Metrics:
+      - Reference: metrics/reference.md
+      - Grafana Queries: metrics/grafana-queries.md
+  - Deployment:
+      - Kustomize: deployment/kustomize.md
+      - RBAC: deployment/rbac.md
+      - Prometheus Scraping: deployment/prometheus.md
+  - API:
+      - Bookkeeping Endpoint: api/bookkeeping.md
+  - Development:
+      - Local Setup: development/local-setup.md
+      - Contributing: development/contributing.md

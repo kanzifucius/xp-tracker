@@ -1,0 +1,7 @@
+bin/
+deploy/
+.git/
+.gitignore
+.golangci.yml
+*.md
+Makefile

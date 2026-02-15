@@ -1,0 +1,83 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xwidgets.samples.xptracker.dev
+spec:
+  group: samples.xptracker.dev
+  names:
+    kind: XWidget
+    plural: xwidgets
+  claimNames:
+    kind: Widget
+    plural: widgets
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  properties:
+                    size:
+                      type: string
+                      enum:
+                        - small
+                        - medium
+                        - large
+                      default: small
+            status:
+              type: object
+              properties:
+                atProvider:
+                  type: object
+                  properties:
+                    state:
+                      type: string
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xgadgets.samples.xptracker.dev
+spec:
+  group: samples.xptracker.dev
+  names:
+    kind: XGadget
+    plural: xgadgets
+  claimNames:
+    kind: Gadget
+    plural: gadgets
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  properties:
+                    size:
+                      type: string
+                      enum:
+                        - small
+                        - medium
+                        - large
+                      default: small
+            status:
+              type: object
+              properties:
+                atProvider:
+                  type: object
+                  properties:
+                    state:
+                      type: string

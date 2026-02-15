@@ -1,0 +1,156 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+  # Deploy versioned docs only after release workflow succeeds
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to perform"
+        required: true
+        default: "deploy"
+        type: choice
+        options:
+          - deploy
+          - delete
+      version:
+        description: "Version to deploy or delete (e.g., 1.0.0, latest, dev)"
+        required: true
+        default: "dev"
+      set_default:
+        description: "Set this version as default (deploy only)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Skip workflow_run events that didn't succeed or aren't for tags
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Detect tag
+        id: detect_tag
+        if: github.event_name == 'workflow_run'
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ github.event.workflow_run.head_branch }}" > /dev/null 2>&1; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            VERSION="${{ github.event.workflow_run.head_branch }}"
+            VERSION=${VERSION#v}
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+            echo "Detected version from release: ${VERSION}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+            echo "Using manual version: ${VERSION}"
+          else
+            VERSION="dev"
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+            echo "Using default version: ${VERSION}"
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('docs/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Cairo dependencies (for social cards)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
+
+      - name: Install dependencies
+        run: pip install -r docs/requirements.txt
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch gh-pages branch
+        run: |
+          git fetch origin gh-pages --depth=1 || echo "gh-pages branch doesn't exist yet"
+
+      # Deploy versioned docs after successful release
+      - name: Deploy versioned docs (after release)
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') && steps.detect_tag.outputs.is_tag == 'true'
+        run: |
+          VERSION="${{ github.event.workflow_run.head_branch }}"
+          VERSION=${VERSION#v}
+          echo "Deploying version: $VERSION (triggered by successful release)"
+          mike deploy --push --update-aliases $VERSION latest
+          mike set-default --push latest
+
+      # Deploy dev docs on main branch push
+      - name: Deploy dev docs (main branch)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mike deploy --push dev
+          mike set-default --push dev
+
+      # Manual deployment
+      - name: Deploy docs (manual)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy'
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          SET_DEFAULT="${{ github.event.inputs.set_default }}"
+          echo "Deploying version: $VERSION"
+
+          if [ "$SET_DEFAULT" = "true" ]; then
+            mike deploy --push --update-aliases $VERSION latest
+            mike set-default --push latest
+          else
+            mike deploy --push $VERSION
+          fi
+
+      # Manual deletion
+      - name: Delete docs version (manual)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'delete'
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "Deleting version: $VERSION"
+          mike delete --push $VERSION
+          echo "Documentation version $VERSION deleted."
