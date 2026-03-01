@@ -43,7 +43,7 @@ func httpGet(t *testing.T, url string) *http.Response {
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- test hits local test server only
 	if err != nil {
 		t.Fatalf("failed to GET %s: %v", url, err)
 	}

@@ -10,6 +10,41 @@ import (
 	"github.com/kanzifucius/xp-tracker/pkg/store"
 )
 
+// ConvertKeys holds the annotation/label keys needed during object conversion.
+// This allows the poller to supply per-namespace overrides without passing the
+// entire Config.
+type ConvertKeys struct {
+	CreatorAnnotationKey string
+	TeamAnnotationKey    string
+	CompositionLabelKey  string
+	Source               string // "central" or "namespace" — propagated to ClaimInfo/XRInfo
+}
+
+// KeysFromConfig builds a ConvertKeys from a central Config.
+func KeysFromConfig(cfg *config.Config) ConvertKeys {
+	return ConvertKeys{
+		CreatorAnnotationKey: cfg.CreatorAnnotationKey,
+		TeamAnnotationKey:    cfg.TeamAnnotationKey,
+		CompositionLabelKey:  cfg.CompositionLabelKey,
+		Source:               "central",
+	}
+}
+
+// KeysFromNamespaceConfig builds a ConvertKeys from a NamespaceConfig,
+// falling back to the central Config for CompositionLabelKey (which is
+// not overridable per-namespace).
+func KeysFromNamespaceConfig(nsCfg *config.NamespaceConfig, centralCfg *config.Config) ConvertKeys {
+	keys := ConvertKeys{
+		CreatorAnnotationKey: nsCfg.CreatorAnnotationKey,
+		TeamAnnotationKey:    nsCfg.TeamAnnotationKey,
+		Source:               "namespace",
+	}
+	if centralCfg != nil {
+		keys.CompositionLabelKey = centralCfg.CompositionLabelKey
+	}
+	return keys
+}
+
 // GVRString returns the "group/version/resource" string for a GVR.
 func GVRString(gvr schema.GroupVersionResource) string {
 	return gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
@@ -17,12 +52,19 @@ func GVRString(gvr schema.GroupVersionResource) string {
 
 // UnstructuredToClaim converts an unstructured Kubernetes object to a ClaimInfo.
 func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionResource, cfg *config.Config) store.ClaimInfo {
+	return UnstructuredToClaimWithKeys(obj, gvr, KeysFromConfig(cfg))
+}
+
+// UnstructuredToClaimWithKeys converts an unstructured Kubernetes object to a ClaimInfo
+// using the specified annotation/label keys.
+func UnstructuredToClaimWithKeys(obj unstructured.Unstructured, gvr schema.GroupVersionResource, keys ConvertKeys) store.ClaimInfo {
 	claim := store.ClaimInfo{
 		GVR:       GVRString(gvr),
 		Group:     gvr.Group,
 		Kind:      obj.GetKind(),
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
+		Source:    keys.Source,
 		CreatedAt: obj.GetCreationTimestamp().Time,
 	}
 
@@ -32,21 +74,21 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 	}
 
 	// Extract creator annotation.
-	if cfg.CreatorAnnotationKey != "" {
-		claim.Creator = obj.GetAnnotations()[cfg.CreatorAnnotationKey]
+	if keys.CreatorAnnotationKey != "" {
+		claim.Creator = obj.GetAnnotations()[keys.CreatorAnnotationKey]
 	}
 
 	// Extract team annotation.
-	if cfg.TeamAnnotationKey != "" {
-		claim.Team = obj.GetAnnotations()[cfg.TeamAnnotationKey]
+	if keys.TeamAnnotationKey != "" {
+		claim.Team = obj.GetAnnotations()[keys.TeamAnnotationKey]
 	}
 
 	// Extract spec.resourceRef.name for composition enrichment.
 	claim.XRRef = nestedString(obj.Object, "spec", "resourceRef", "name")
 
 	// Extract composition from labels on the claim itself (some setups label claims directly).
-	if cfg.CompositionLabelKey != "" {
-		if comp := obj.GetLabels()[cfg.CompositionLabelKey]; comp != "" {
+	if keys.CompositionLabelKey != "" {
+		if comp := obj.GetLabels()[keys.CompositionLabelKey]; comp != "" {
 			claim.Composition = comp
 		}
 	}
@@ -59,12 +101,19 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 
 // UnstructuredToXR converts an unstructured Kubernetes object to an XRInfo.
 func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionResource, cfg *config.Config) store.XRInfo {
+	return UnstructuredToXRWithKeys(obj, gvr, KeysFromConfig(cfg))
+}
+
+// UnstructuredToXRWithKeys converts an unstructured Kubernetes object to an XRInfo
+// using the specified annotation/label keys.
+func UnstructuredToXRWithKeys(obj unstructured.Unstructured, gvr schema.GroupVersionResource, keys ConvertKeys) store.XRInfo {
 	xr := store.XRInfo{
 		GVR:       GVRString(gvr),
 		Group:     gvr.Group,
 		Kind:      obj.GetKind(),
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
+		Source:    keys.Source,
 		CreatedAt: obj.GetCreationTimestamp().Time,
 	}
 
@@ -73,8 +122,8 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	}
 
 	// Extract composition label.
-	if cfg.CompositionLabelKey != "" {
-		xr.Composition = obj.GetLabels()[cfg.CompositionLabelKey]
+	if keys.CompositionLabelKey != "" {
+		xr.Composition = obj.GetLabels()[keys.CompositionLabelKey]
 	}
 
 	// Extract Ready condition.

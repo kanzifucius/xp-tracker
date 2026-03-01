@@ -70,12 +70,22 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
                        |  Kubernetes API |
                        +--------+--------+
                                 |
-                         List (dynamic client, paginated)
+                    +-----------+-----------+
+                    |                       |
+             List (dynamic client)   Watch (typed client)
+                    |                       |
+           +--------v--------+    +--------v-----------+
+           |     Poller      |    |  ConfigMap Watcher  |
+           |  (pkg/kube)     |    |  (pkg/kube)         |
+           +--------+--------+    +--------+------------+
+                    |                       |
+                    |    per-namespace GVR configs
+                    |    (label: xp-tracker.kanzi.io/config)
+                    |                       |
+                    +-----------+-----------+
                                 |
-                       +--------v--------+
-                       |     Poller      |  polls every N seconds
-                       |  (pkg/kube)     |  for each configured GVR
-                       +--------+--------+  skips Persist on errors
+                    polls central + namespace GVRs
+                    (namespace claims scoped, XRs cluster-wide)
                                 |
                        ReplaceClaims / ReplaceXRs
                        EnrichClaimCompositions
@@ -168,8 +178,8 @@ All configuration is via environment variables.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `CLAIM_GVRS` | yes | -- | Comma-separated claim GVRs (`group/version/resource`) |
-| `XR_GVRS` | yes | -- | Comma-separated XR GVRs |
+| `CLAIM_GVRS` | no | -- | Comma-separated claim GVRs (`group/version/resource`) |
+| `XR_GVRS` | no | -- | Comma-separated XR GVRs |
 | `KUBE_NAMESPACE_SCOPE` | no | `""` (all) | Comma-separated namespace filter |
 | `CREATOR_ANNOTATION_KEY` | no | `""` | Annotation key for claim creator |
 | `TEAM_ANNOTATION_KEY` | no | `""` | Annotation key for claim team |
@@ -191,16 +201,46 @@ CLAIM_GVRS=platform.example.org/v1alpha1/postgresqlinstances,platform.example.or
 XR_GVRS=platform.example.org/v1alpha1/xpostgresqlinstances,platform.example.org/v1alpha1/xkafkatopics
 ```
 
+### Per-Namespace ConfigMaps
+
+In addition to central environment variables, teams can opt into GVR monitoring by creating labeled ConfigMaps in their own namespaces. This enables a self-service model where tenants declare which Crossplane resources they want tracked -- without modifying the platform team's central configuration.
+
+The exporter discovers ConfigMaps with the label `xp-tracker.kanzi.io/config: "gvrs"` using a Kubernetes informer. Changes are picked up automatically (hot reload) -- no restart required.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-team-xp-tracker       # any name
+  namespace: team-a
+  labels:
+    xp-tracker.kanzi.io/config: "gvrs"
+data:
+  CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances"
+  XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances"
+  CREATOR_ANNOTATION_KEY: "platform.example.org/created-by"   # optional override
+  TEAM_ANNOTATION_KEY: "platform.example.org/team"             # optional override
+```
+
+**Scoping rules:**
+
+- **Claims** from a namespace ConfigMap are polled **only within that namespace**.
+- **XRs** are polled **cluster-wide** (Crossplane XRs are cluster-scoped).
+- If a GVR appears in both the central config and a namespace ConfigMap, the **central config takes priority** and the namespace entry is silently skipped.
+- `CLAIM_GVRS` and `XR_GVRS` in the central config are now **optional**, supporting pure namespace-driven deployments.
+
+A sample ConfigMap is included at `deploy/base/sample-namespace-configmap.yaml`. See the [full documentation](docs/configuration/namespace-configmaps.md) for details on supported fields, deduplication, annotation inheritance, and troubleshooting.
+
 ## Metrics Reference
 
 All metrics are Prometheus **gauges** that are recomputed on each scrape from the in-memory store.
 
 | Metric | Type | Labels | Description |
 |---|---|---|---|
-| `crossplane_claims_total` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team` | Total number of claims |
-| `crossplane_claims_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team` | Number of claims with Ready=True |
-| `crossplane_xr_total` | Gauge | `group`, `kind`, `namespace`, `composition` | Total number of XRs |
-| `crossplane_xr_ready` | Gauge | `group`, `kind`, `namespace`, `composition` | Number of XRs with Ready=True |
+| `crossplane_claims_total` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team`, `source` | Total number of claims |
+| `crossplane_claims_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team`, `source` | Number of claims with Ready=True |
+| `crossplane_xr_total` | Gauge | `group`, `kind`, `namespace`, `composition`, `source` | Total number of XRs |
+| `crossplane_xr_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `source` | Number of XRs with Ready=True |
 
 ### Label details
 
@@ -210,36 +250,37 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 - **composition** -- Crossplane Composition name, extracted from the `COMPOSITION_LABEL_KEY` label on XRs and enriched onto claims via `spec.resourceRef`
 - **creator** -- Value of the annotation specified by `CREATOR_ANNOTATION_KEY` (claims only)
 - **team** -- Value of the annotation specified by `TEAM_ANNOTATION_KEY` (claims only)
+- **source** -- Configuration origin: `"central"` for GVRs defined via environment variables, `"namespace"` for GVRs from per-namespace ConfigMaps
 
 ### Example output
 
 Output from `curl localhost:8080/metrics` with the sample resources applied (`make samples-apply`):
 
 ```
-# HELP crossplane_claims_ready Number of Ready Crossplane claims by group, kind, namespace, composition and creator.
+# HELP crossplane_claims_ready Number of Ready Crossplane claims by group, kind, namespace, composition, creator, team and source.
 # TYPE crossplane_claims_ready gauge
-crossplane_claims_ready{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 0
-crossplane_claims_ready{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",team="platform"} 0
-crossplane_claims_ready{composition="",creator="bob@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 0
-crossplane_claims_ready{composition="",creator="carol@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 0
-crossplane_claims_ready{composition="",creator="dave@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 0
-crossplane_claims_ready{composition="",creator="eve@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-gamma",team="data"} 0
-# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, composition and creator.
+crossplane_claims_ready{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",source="central",team="platform"} 0
+crossplane_claims_ready{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",source="central",team="platform"} 0
+crossplane_claims_ready{composition="",creator="bob@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",source="central",team="backend"} 0
+crossplane_claims_ready{composition="",creator="carol@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",source="central",team="backend"} 0
+crossplane_claims_ready{composition="",creator="dave@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",source="central",team="platform"} 0
+crossplane_claims_ready{composition="",creator="eve@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-gamma",source="central",team="data"} 0
+# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, composition, creator, team and source.
 # TYPE crossplane_claims_total gauge
-crossplane_claims_total{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 1
-crossplane_claims_total{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",team="platform"} 2
-crossplane_claims_total{composition="",creator="bob@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 1
-crossplane_claims_total{composition="",creator="carol@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 1
-crossplane_claims_total{composition="",creator="dave@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 1
-crossplane_claims_total{composition="",creator="eve@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-gamma",team="data"} 2
-# HELP crossplane_xr_ready Number of Ready Crossplane XRs by group, kind, namespace and composition.
+crossplane_claims_total{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",source="central",team="platform"} 1
+crossplane_claims_total{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",source="central",team="platform"} 2
+crossplane_claims_total{composition="",creator="bob@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",source="central",team="backend"} 1
+crossplane_claims_total{composition="",creator="carol@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",source="central",team="backend"} 1
+crossplane_claims_total{composition="",creator="dave@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",source="central",team="platform"} 1
+crossplane_claims_total{composition="",creator="eve@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-gamma",source="central",team="data"} 2
+# HELP crossplane_xr_ready Number of Ready Crossplane XRs by group, kind, namespace, composition and source.
 # TYPE crossplane_xr_ready gauge
-crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XGadget",namespace=""} 0
-crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XWidget",namespace=""} 0
-# HELP crossplane_xr_total Number of Crossplane composite resources (XRs) by group, kind, namespace and composition.
+crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XGadget",namespace="",source="central"} 0
+crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XWidget",namespace="",source="central"} 0
+# HELP crossplane_xr_total Number of Crossplane composite resources (XRs) by group, kind, namespace, composition and source.
 # TYPE crossplane_xr_total gauge
-crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XGadget",namespace=""} 4
-crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XWidget",namespace=""} 4
+crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XGadget",namespace="",source="central"} 4
+crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XWidget",namespace="",source="central"} 4
 ```
 
 ## Bookkeeping JSON Endpoint
@@ -267,6 +308,7 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
       "creator": "alice@example.com",
       "team": "payments",
       "composition": "postgres-small",
+      "source": "central",
       "ready": true,
       "reason": "Ready",
       "ageSeconds": 12345
@@ -279,6 +321,7 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
       "namespace": "",
       "name": "db-123-xyz",
       "composition": "postgres-small",
+      "source": "central",
       "ready": true,
       "reason": "Ready",
       "ageSeconds": 12300
@@ -410,6 +453,14 @@ rules:
 ```
 
 The example overlay at `deploy/overlays/example/` includes a scoped ClusterRole patch that demonstrates this pattern. See [RBAC docs](docs/deployment/rbac.md) for details.
+
+When using per-namespace ConfigMaps, the exporter also needs `get`, `list`, and `watch` access to ConfigMaps across namespaces. The base ClusterRole already includes this rule:
+
+```yaml
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+```
 
 The ClusterRoleBinding binds this role to the `crossplane-metrics-exporter` ServiceAccount in the `crossplane-system` namespace.
 
@@ -638,8 +689,10 @@ make run
 │       └── main.go                  # Entrypoint -- config, client, poller, server, signal handling
 ├── pkg/
 │   ├── config/                      # Environment variable parsing and validation
+│   │   └── namespace_config.go      # Per-namespace ConfigMap parsing + label constants
 │   ├── kube/
-│   │   ├── client.go                # Dynamic client factory (in-cluster + kubeconfig fallback)
+│   │   ├── client.go                # Dynamic + typed client factory (in-cluster + kubeconfig fallback)
+│   │   ├── configmap_watcher.go     # ConfigMap informer with label-selector discovery
 │   │   ├── convert.go               # Unstructured -> ClaimInfo/XRInfo conversion
 │   │   └── poller.go                # Ticker-based polling loop with composition enrichment
 │   ├── metrics/
@@ -654,6 +707,7 @@ make run
 │       └── s3store.go               # S3Store persistent backend (decorator over MemoryStore)
 ├── deploy/
 │   ├── base/                        # Kustomize base (SA, RBAC, ConfigMap, Deployment, Service)
+│   │   └── sample-namespace-configmap.yaml  # Example per-namespace ConfigMap for teams
 │   └── overlays/
 │       └── example/                 # Example overlay with ServiceMonitor
 ├── hack/
@@ -710,6 +764,7 @@ xp-tracker also exposes metrics about its own operation under the `xp_tracker_` 
 | `xp_tracker_poll_errors_total` | Counter | Total number of per-GVR poll errors |
 | `xp_tracker_store_claims` | Gauge | Current number of claims in the store |
 | `xp_tracker_store_xrs` | Gauge | Current number of XRs in the store |
+| `xp_tracker_namespace_configs` | Gauge | Number of active per-namespace ConfigMaps discovered |
 | `xp_tracker_s3_persist_duration_seconds` | Histogram | Duration of each S3 persist operation |
 
 ### Single replica requirement

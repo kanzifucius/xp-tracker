@@ -12,15 +12,15 @@ import (
 var (
 	claimTotalDesc = prometheus.NewDesc(
 		"crossplane_claims_total",
-		"Number of Crossplane claims by group, kind, namespace, composition and creator.",
-		[]string{"group", "kind", "namespace", "composition", "creator", "team"},
+		"Number of Crossplane claims by group, kind, namespace, composition, creator, team and source.",
+		[]string{"group", "kind", "namespace", "composition", "creator", "team", "source"},
 		nil,
 	)
 
 	claimReadyDesc = prometheus.NewDesc(
 		"crossplane_claims_ready",
-		"Number of Ready Crossplane claims by group, kind, namespace, composition and creator.",
-		[]string{"group", "kind", "namespace", "composition", "creator", "team"},
+		"Number of Ready Crossplane claims by group, kind, namespace, composition, creator, team and source.",
+		[]string{"group", "kind", "namespace", "composition", "creator", "team", "source"},
 		nil,
 	)
 )
@@ -33,6 +33,7 @@ type claimAggKey struct {
 	Composition string
 	Creator     string
 	Team        string
+	Source      string
 }
 
 // claimAggVal holds aggregated counts for a claim label tuple.
@@ -70,6 +71,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			Composition: claim.Composition,
 			Creator:     claim.Creator,
 			Team:        claim.Team,
+			Source:      claim.Source,
 		}
 		v, ok := agg[key]
 		if !ok {
@@ -87,7 +89,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			claimTotalDesc,
 			prometheus.GaugeValue,
 			float64(val.Total),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team,
+			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team, key.Source,
 		)
 		if err != nil {
 			slog.Error("failed to create claim_total metric", "error", err)
@@ -99,7 +101,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			claimReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team,
+			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team, key.Source,
 		)
 		if err != nil {
 			slog.Error("failed to create claim_ready metric", "error", err)

@@ -14,8 +14,12 @@ The base at `deploy/base/` includes:
 | `configmap.yaml` | Environment variables for the exporter |
 | `deployment.yaml` | Single-replica Deployment |
 | `service.yaml` | Service exposing port 8080 (`metrics`) |
+| `sample-namespace-configmap.yaml` | Example per-namespace ConfigMap for teams (not applied by default) |
 
-The base deploys to the `crossplane-system` namespace and includes placeholder GVRs that must be overridden.
+The base deploys to the `crossplane-system` namespace and includes placeholder GVRs that can be overridden.
+
+!!! tip "Per-namespace ConfigMaps"
+    The base also includes a `sample-namespace-configmap.yaml` that teams can copy and adapt. See [Per-Namespace ConfigMaps](../configuration/namespace-configmaps.md) for details.
 
 ```bash
 # Review rendered manifests

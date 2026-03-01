@@ -83,6 +83,8 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
 ```mermaid
 graph TD
     A[Kubernetes API] -->|List / Watch| B[Poller<br/><small>pkg/kube</small>]
+    NS[Per-Namespace ConfigMaps<br/><small>labeled: xp-tracker.kanzi.io/config=gvrs</small>] -->|Informer Watch| W[ConfigMap Watcher<br/><small>pkg/kube</small>]
+    W -->|NamespaceConfigs| B
     B -->|ReplaceClaims / ReplaceXRs<br/>EnrichClaimCompositions| C[In-Memory Store<br/><small>pkg/store</small>]
     C -->|SnapshotClaims / SnapshotXRs| D[Claim & XR Collectors<br/><small>pkg/metrics</small>]
     D --> E[HTTP Server<br/><small>pkg/server</small>]
@@ -91,6 +93,7 @@ graph TD
     F --> H[Grafana]
 
     style A fill:#326CE5,color:#fff,stroke:#326CE5
+    style NS fill:#7C3AED,color:#fff,stroke:#7C3AED
     style F fill:#E6522C,color:#fff,stroke:#E6522C
     style H fill:#F46800,color:#fff,stroke:#F46800
 ```
@@ -99,6 +102,7 @@ graph TD
 
 - :material-shield-lock-outline: **Read-only** -- only `get`, `list`, and `watch` operations against the Kubernetes API. Never creates, updates, or deletes resources.
 - :material-auto-fix: **Dynamic client** -- works with any Crossplane CRD without code generation. Configure GVRs via environment variables.
+- :material-folder-multiple-outline: **Per-namespace ConfigMaps** -- teams can opt into monitoring by creating labeled ConfigMaps in their own namespaces, with hot reload via Kubernetes informers. See [Per-Namespace ConfigMaps](configuration/namespace-configmaps.md).
 - :material-chart-bar: **Claim metrics** -- total and ready counts broken down by group, kind, namespace, composition, creator, and team.
 - :material-chart-donut: **XR metrics** -- total and ready counts broken down by group, kind, namespace, and composition.
 - :material-link-variant: **Composition enrichment** -- claims are enriched with their composition name by following `spec.resourceRef` to the backing XR.

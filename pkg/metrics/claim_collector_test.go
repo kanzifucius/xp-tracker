@@ -29,9 +29,9 @@ func TestClaimCollector_Empty(t *testing.T) {
 func TestClaimCollector_SingleGroup(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Creator: "alice", Team: "backend", Composition: "comp-a", Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Creator: "alice", Team: "backend", Composition: "comp-a", Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Creator: "alice", Team: "backend", Composition: "comp-a", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Creator: "alice", Team: "backend", Composition: "comp-a", Source: "central", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Creator: "alice", Team: "backend", Composition: "comp-a", Source: "central", Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Creator: "alice", Team: "backend", Composition: "comp-a", Source: "central", Ready: true},
 	})
 
 	c := NewClaimCollector(s)
@@ -65,15 +65,16 @@ func TestClaimCollector_SingleGroup(t *testing.T) {
 	assertLabel(t, labels, "composition", "comp-a")
 	assertLabel(t, labels, "creator", "alice")
 	assertLabel(t, labels, "team", "backend")
+	assertLabel(t, labels, "source", "central")
 }
 
 func TestClaimCollector_MultipleGroups(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Source: "central", Ready: true},
 	})
 	s.ReplaceClaims("g/v1/widgets", []store.ClaimInfo{
-		{GVR: "g/v1/widgets", Group: "g", Kind: "Widget", Namespace: "ns2", Name: "b", Ready: false},
+		{GVR: "g/v1/widgets", Group: "g", Kind: "Widget", Namespace: "ns2", Name: "b", Source: "central", Ready: false},
 	})
 
 	c := NewClaimCollector(s)
@@ -92,7 +93,7 @@ func TestClaimCollector_MultipleGroups(t *testing.T) {
 func TestClaimCollector_EmptyLabels(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a"},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Source: "central"},
 	})
 
 	c := NewClaimCollector(s)
@@ -107,6 +108,7 @@ func TestClaimCollector_EmptyLabels(t *testing.T) {
 	assertLabel(t, labels, "creator", "")
 	assertLabel(t, labels, "team", "")
 	assertLabel(t, labels, "composition", "")
+	assertLabel(t, labels, "source", "central")
 }
 
 func TestClaimCollector_Describe(t *testing.T) {
@@ -129,11 +131,11 @@ func TestClaimCollector_Describe(t *testing.T) {
 func TestClaimCollector_ReadySubsetOfTotal(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "d", Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "e", Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Source: "central", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Source: "central", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Source: "central", Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "d", Source: "central", Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "e", Source: "central", Ready: false},
 	})
 
 	c := NewClaimCollector(s)

@@ -17,6 +17,7 @@ type ClaimInfo struct {
 	Creator     string    `json:"creator"`     // from annotation, or empty
 	Team        string    `json:"team"`        // from annotation, or empty
 	Composition string    `json:"composition"` // resolved from XR reference/labels, or empty
+	Source      string    `json:"source"`      // "central" or "namespace" — indicates config origin
 	Ready       bool      `json:"ready"`
 	Reason      string    `json:"reason"`    // Ready condition reason
 	CreatedAt   time.Time `json:"createdAt"` // metadata.creationTimestamp
@@ -31,6 +32,7 @@ type XRInfo struct {
 	Namespace   string    `json:"namespace"` // usually empty for cluster-scoped XRs
 	Name        string    `json:"name"`
 	Composition string    `json:"composition"`
+	Source      string    `json:"source"` // "central" or "namespace" — indicates config origin
 	Ready       bool      `json:"ready"`
 	Reason      string    `json:"reason"`    // Ready condition reason
 	CreatedAt   time.Time `json:"createdAt"` // metadata.creationTimestamp

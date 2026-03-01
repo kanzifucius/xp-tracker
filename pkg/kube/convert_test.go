@@ -103,6 +103,9 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 	if !claim.CreatedAt.Equal(now) {
 		t.Errorf("CreatedAt: got %v, want %v", claim.CreatedAt, now)
 	}
+	if claim.Source != "central" {
+		t.Errorf("Source: got %q, want %q", claim.Source, "central")
+	}
 }
 
 func TestUnstructuredToClaim_Minimal(t *testing.T) {
@@ -132,6 +135,9 @@ func TestUnstructuredToClaim_Minimal(t *testing.T) {
 	}
 	if claim.XRRef != "" {
 		t.Errorf("XRRef should be empty, got %q", claim.XRRef)
+	}
+	if claim.Source != "central" {
+		t.Errorf("Source: got %q, want %q", claim.Source, "central")
 	}
 }
 
@@ -207,6 +213,9 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 	}
 	if xr.Reason != "Unavailable" {
 		t.Errorf("Reason: got %q", xr.Reason)
+	}
+	if xr.Source != "central" {
+		t.Errorf("Source: got %q, want %q", xr.Source, "central")
 	}
 }
 

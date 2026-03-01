@@ -80,3 +80,24 @@ subjects:
 ## Why read-only?
 
 xp-tracker is strictly a metrics exporter. It never creates, updates, or deletes resources. The `get`, `list`, and `watch` verbs are the minimum required to poll the API server for resource metadata.
+
+## ConfigMap access
+
+When using [per-namespace ConfigMaps](../configuration/namespace-configmaps.md), the exporter also needs read access to ConfigMaps across all namespaces. The base ClusterRole already covers this via the wildcard rule. If you scope down RBAC for production, add an explicit ConfigMap rule:
+
+```yaml
+rules:
+  # Your Crossplane resource rules...
+  - apiGroups: ["platform.example.org"]
+    resources:
+      - postgresqlinstances
+      - xpostgresqlinstances
+    verbs: ["get", "list", "watch"]
+  # ConfigMap access for per-namespace GVR discovery
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+```
+
+!!! note
+    ConfigMap access is needed even if you don't currently use per-namespace ConfigMaps. The watcher starts automatically and watches for labeled ConfigMaps. Without this RBAC rule, the watcher will log permission errors.

@@ -69,6 +69,10 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
 
+      - name: Set build date from commit
+        id: build_date
+        run: echo "date=$(git log -1 --format=%cI)" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -80,6 +84,6 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            BUILD_DATE=${{ steps.build_date.outputs.date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

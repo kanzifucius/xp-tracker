@@ -1,0 +1,42 @@
+# Per-namespace ConfigMaps for the sample dev environment.
+# Each namespace declares which sample GVRs it wants xp-tracker to monitor.
+# The exporter discovers these via the label xp-tracker.kanzi.io/config: "gvrs".
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xp-tracker-gvrs
+  namespace: team-alpha
+  labels:
+    xp-tracker.kanzi.io/config: "gvrs"
+data:
+  CLAIM_GVRS: "samples.xptracker.dev/v1alpha1/widgets,samples.xptracker.dev/v1alpha1/gadgets"
+  XR_GVRS: "samples.xptracker.dev/v1alpha1/xwidgets,samples.xptracker.dev/v1alpha1/xgadgets"
+  CREATOR_ANNOTATION_KEY: "xptracker.dev/created-by"
+  TEAM_ANNOTATION_KEY: "xptracker.dev/team"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xp-tracker-gvrs
+  namespace: team-beta
+  labels:
+    xp-tracker.kanzi.io/config: "gvrs"
+data:
+  CLAIM_GVRS: "samples.xptracker.dev/v1alpha1/widgets"
+  XR_GVRS: "samples.xptracker.dev/v1alpha1/xwidgets"
+  CREATOR_ANNOTATION_KEY: "xptracker.dev/created-by"
+  TEAM_ANNOTATION_KEY: "xptracker.dev/team"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xp-tracker-gvrs
+  namespace: team-gamma
+  labels:
+    xp-tracker.kanzi.io/config: "gvrs"
+data:
+  CLAIM_GVRS: "samples.xptracker.dev/v1alpha1/gadgets"
+  XR_GVRS: "samples.xptracker.dev/v1alpha1/xgadgets"
+  CREATOR_ANNOTATION_KEY: "xptracker.dev/created-by"
+  TEAM_ANNOTATION_KEY: "xptracker.dev/team"

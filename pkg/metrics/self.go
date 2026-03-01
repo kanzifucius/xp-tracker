@@ -40,6 +40,12 @@ var (
 		Help:    "Duration of S3 snapshot persist operations in seconds.",
 		Buckets: prometheus.DefBuckets,
 	})
+
+	// NamespaceConfigs reports the number of active per-namespace ConfigMaps.
+	NamespaceConfigs = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "xp_tracker_namespace_configs",
+		Help: "Current number of active per-namespace ConfigMap configurations.",
+	})
 )
 
 // RegisterSelfMetrics registers all self-monitoring metrics with the given
@@ -51,5 +57,6 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		StoreClaims,
 		StoreXRs,
 		S3PersistDuration,
+		NamespaceConfigs,
 	)
 }

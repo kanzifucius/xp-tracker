@@ -1,11 +1,12 @@
 .DEFAULT_GOAL := help
 
-.PHONY: build test lint vet fmt run run-local clean check ci \
+.PHONY: build test lint vet fmt run run-local run-local-namespace clean check ci \
         docker-build docker-build-multiarch docker-push docker-push-multiarch \
         deploy deploy-example deploy-dry-run \
         mod-tidy mod-verify \
         cover cover-html \
         samples-apply samples-delete \
+        namespace-config-apply namespace-config-delete \
         kindplane-up kindplane-down kindplane-status dev dev-down \
         logs \
         docs-serve \
@@ -36,6 +37,12 @@ run: build ## Build and run locally
 run-local: build ## Build and run locally with sample resource config
 	CLAIM_GVRS=samples.xptracker.dev/v1alpha1/widgets,samples.xptracker.dev/v1alpha1/gadgets \
 	XR_GVRS=samples.xptracker.dev/v1alpha1/xwidgets,samples.xptracker.dev/v1alpha1/xgadgets \
+	CREATOR_ANNOTATION_KEY=xptracker.dev/created-by \
+	TEAM_ANNOTATION_KEY=xptracker.dev/team \
+	POLL_INTERVAL_SECONDS=10 \
+	./bin/$(BINARY)
+
+run-local-namespace: build ## Build and run locally using per-namespace ConfigMaps (no central GVRs)
 	CREATOR_ANNOTATION_KEY=xptracker.dev/created-by \
 	TEAM_ANNOTATION_KEY=xptracker.dev/team \
 	POLL_INTERVAL_SECONDS=10 \
@@ -142,6 +149,14 @@ samples-delete: ## Delete sample resources from the cluster
 	-kubectl delete -f hack/samples/functions.yaml
 	-kubectl delete -f hack/samples/namespaces.yaml
 
+# --- Namespace ConfigMaps ---
+
+namespace-config-apply: ## Apply sample per-namespace ConfigMaps for dev
+	kubectl apply -f hack/samples/namespace-configmaps.yaml
+
+namespace-config-delete: ## Delete sample per-namespace ConfigMaps
+	-kubectl delete -f hack/samples/namespace-configmaps.yaml
+
 # --- Kindplane ---
 
 kindplane-up: ## Create kindplane cluster with Crossplane and Prometheus
@@ -153,17 +168,18 @@ kindplane-down: ## Tear down the kindplane cluster
 kindplane-status: ## Show kindplane cluster status
 	kindplane status
 
-dev: kindplane-up samples-apply ## Bootstrap full dev environment (cluster + samples)
+dev: kindplane-up samples-apply namespace-config-apply ## Bootstrap full dev environment (cluster + samples + namespace configs)
 	@echo ""
 	@echo "Dev environment ready. Start the exporter with:"
 	@echo ""
-	@echo "  make run-local"
+	@echo "  make run-local              # central GVRs via env vars"
+	@echo "  make run-local-namespace    # namespace ConfigMaps only (no central GVRs)"
 	@echo ""
 	@echo "Grafana: http://localhost:30300 (admin/admin)"
 	@echo "Metrics: curl localhost:8080/metrics"
 	@echo "Bookkeeping: curl localhost:8080/bookkeeping"
 
-dev-down: samples-delete kindplane-down ## Tear down full dev environment
+dev-down: samples-delete namespace-config-delete kindplane-down ## Tear down full dev environment
 
 logs: ## Tail exporter logs (in-cluster deployment)
 	kubectl logs -n crossplane-system deploy/crossplane-metrics-exporter -f

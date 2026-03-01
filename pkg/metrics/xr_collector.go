@@ -11,15 +11,15 @@ import (
 var (
 	xrTotalDesc = prometheus.NewDesc(
 		"crossplane_xr_total",
-		"Number of Crossplane composite resources (XRs) by group, kind, namespace and composition.",
-		[]string{"group", "kind", "namespace", "composition"},
+		"Number of Crossplane composite resources (XRs) by group, kind, namespace, composition and source.",
+		[]string{"group", "kind", "namespace", "composition", "source"},
 		nil,
 	)
 
 	xrReadyDesc = prometheus.NewDesc(
 		"crossplane_xr_ready",
-		"Number of Ready Crossplane XRs by group, kind, namespace and composition.",
-		[]string{"group", "kind", "namespace", "composition"},
+		"Number of Ready Crossplane XRs by group, kind, namespace, composition and source.",
+		[]string{"group", "kind", "namespace", "composition", "source"},
 		nil,
 	)
 )
@@ -30,6 +30,7 @@ type xrAggKey struct {
 	Kind        string
 	Namespace   string
 	Composition string
+	Source      string
 }
 
 // xrAggVal holds aggregated counts for an XR label tuple.
@@ -65,6 +66,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			Kind:        xr.Kind,
 			Namespace:   xr.Namespace,
 			Composition: xr.Composition,
+			Source:      xr.Source,
 		}
 		v, ok := agg[key]
 		if !ok {
@@ -82,7 +84,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			xrTotalDesc,
 			prometheus.GaugeValue,
 			float64(val.Total),
-			key.Group, key.Kind, key.Namespace, key.Composition,
+			key.Group, key.Kind, key.Namespace, key.Composition, key.Source,
 		)
 		if err != nil {
 			slog.Error("failed to create xr_total metric", "error", err)
@@ -94,7 +96,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			xrReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
-			key.Group, key.Kind, key.Namespace, key.Composition,
+			key.Group, key.Kind, key.Namespace, key.Composition, key.Source,
 		)
 		if err != nil {
 			slog.Error("failed to create xr_ready metric", "error", err)

@@ -18,6 +18,7 @@ type ClaimDTO struct {
 	Creator     string `json:"creator"`
 	Team        string `json:"team"`
 	Composition string `json:"composition"`
+	Source      string `json:"source"`
 	Ready       bool   `json:"ready"`
 	Reason      string `json:"reason"`
 	AgeSeconds  int64  `json:"ageSeconds"`
@@ -30,6 +31,7 @@ type XRDTO struct {
 	Namespace   string `json:"namespace"`
 	Name        string `json:"name"`
 	Composition string `json:"composition"`
+	Source      string `json:"source"`
 	Ready       bool   `json:"ready"`
 	Reason      string `json:"reason"`
 	AgeSeconds  int64  `json:"ageSeconds"`
@@ -61,6 +63,7 @@ func bookkeepingHandler(s store.Store) http.HandlerFunc {
 				Creator:     c.Creator,
 				Team:        c.Team,
 				Composition: c.Composition,
+				Source:      c.Source,
 				Ready:       c.Ready,
 				Reason:      c.Reason,
 				AgeSeconds:  age,
@@ -76,6 +79,7 @@ func bookkeepingHandler(s store.Store) http.HandlerFunc {
 				Namespace:   x.Namespace,
 				Name:        x.Name,
 				Composition: x.Composition,
+				Source:      x.Source,
 				Ready:       x.Ready,
 				Reason:      x.Reason,
 				AgeSeconds:  age,
