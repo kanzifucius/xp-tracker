@@ -111,7 +111,11 @@ func run() error {
 	poller := kube.NewPoller(client, cfg, s)
 
 	// Start the ConfigMap watcher for per-namespace configs.
-	cmWatcher := kube.NewConfigMapWatcher(typedClient, cfg)
+	cmWatcher, err := kube.NewConfigMapWatcher(typedClient, cfg)
+	if err != nil {
+		slog.Error("failed to create ConfigMap watcher", "error", err)
+		os.Exit(1)
+	}
 	stopCh := make(chan struct{})
 	go cmWatcher.Run(stopCh)
 	cmWatcher.WaitForSync(stopCh)

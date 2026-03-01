@@ -176,7 +176,8 @@ func ParseGVRs(raw string) ([]schema.GroupVersionResource, error) {
 		}
 		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
 		if _, dup := seen[key]; dup {
-			slog.Warn("duplicate GVR ignored", "gvr", key)
+			// key is derived from parsed GVR (group/version/resource), not user-controlled input
+			slog.Warn("duplicate GVR ignored", "gvr", key) // #nosec G706
 			continue
 		}
 		seen[key] = struct{}{}

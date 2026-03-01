@@ -28,7 +28,10 @@ func makeConfigMap(namespace, name string, data map[string]string) *corev1.Confi
 func startWatcher(t *testing.T, objects []runtime.Object, fallback *config.Config) (*ConfigMapWatcher, chan struct{}) {
 	t.Helper()
 	client := fake.NewClientset(objects...)
-	w := NewConfigMapWatcher(client, fallback)
+	w, err := NewConfigMapWatcher(client, fallback)
+	if err != nil {
+		t.Fatalf("NewConfigMapWatcher: %v", err)
+	}
 	stopCh := make(chan struct{})
 	go w.Run(stopCh)
 	if !w.WaitForSync(stopCh) {

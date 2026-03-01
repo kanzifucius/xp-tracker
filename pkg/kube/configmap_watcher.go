@@ -27,7 +27,8 @@ type ConfigMapWatcher struct {
 
 // NewConfigMapWatcher creates a ConfigMapWatcher that watches ConfigMaps across
 // all namespaces with the label xp-tracker.kanzi.io/config=gvrs.
-func NewConfigMapWatcher(client kubernetes.Interface, fallback *config.Config) *ConfigMapWatcher {
+// It returns (nil, err) if the event handler cannot be registered.
+func NewConfigMapWatcher(client kubernetes.Interface, fallback *config.Config) (*ConfigMapWatcher, error) {
 	labelSelector := fmt.Sprintf("%s=%s", config.ConfigMapLabelKey, config.ConfigMapLabelValue)
 
 	factory := informers.NewSharedInformerFactoryWithOptions(
@@ -45,13 +46,16 @@ func NewConfigMapWatcher(client kubernetes.Interface, fallback *config.Config) *
 	}
 
 	cmInformer := factory.Core().V1().ConfigMaps().Informer()
-	cmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err := cmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    w.onAdd,
 		UpdateFunc: w.onUpdate,
 		DeleteFunc: w.onDelete,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("add ConfigMap event handler: %w", err)
+	}
 
-	return w
+	return w, nil
 }
 
 // Run starts the informer and blocks until the stop channel is closed.

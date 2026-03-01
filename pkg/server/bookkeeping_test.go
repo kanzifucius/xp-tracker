@@ -236,7 +236,7 @@ func TestBookkeeping_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- test hits local test server only
 	if err != nil {
 		t.Fatalf("failed to GET /bookkeeping: %v", err)
 	}
