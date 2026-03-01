@@ -14,12 +14,19 @@ import (
 	"github.com/kanzifucius/xp-tracker/pkg/store"
 )
 
+// NamespaceConfigProvider supplies per-namespace GVR configurations.
+// The ConfigMapWatcher implements this interface.
+type NamespaceConfigProvider interface {
+	NamespaceConfigs() []config.NamespaceConfig
+}
+
 // Poller periodically lists Crossplane claims and XRs from the Kubernetes API
 // and updates the in-memory store.
 type Poller struct {
-	client dynamic.Interface
-	cfg    *config.Config
-	store  store.Store
+	client    dynamic.Interface
+	cfg       *config.Config
+	store     store.Store
+	nsConfigs NamespaceConfigProvider // optional; nil means no namespace config polling
 }
 
 // NewPoller creates a new Poller.
@@ -29,6 +36,12 @@ func NewPoller(client dynamic.Interface, cfg *config.Config, s store.Store) *Pol
 		cfg:    cfg,
 		store:  s,
 	}
+}
+
+// SetNamespaceConfigProvider sets the provider for per-namespace GVR configurations.
+// This must be called before Run.
+func (p *Poller) SetNamespaceConfigProvider(provider NamespaceConfigProvider) {
+	p.nsConfigs = provider
 }
 
 // Run starts the polling loop. It blocks until ctx is cancelled.
@@ -57,8 +70,13 @@ func (p *Poller) poll(ctx context.Context) {
 
 	var hadErrors bool
 
+	// Track centrally-polled GVRs to avoid duplicating work for namespace configs.
+	centralClaimGVRs := make(map[string]struct{}, len(p.cfg.ClaimGVRs))
+	centralXRGVRs := make(map[string]struct{}, len(p.cfg.XRGVRs))
+
 	// Poll XRs first so composition data is available for claim enrichment.
 	for _, gvr := range p.cfg.XRGVRs {
+		centralXRGVRs[GVRString(gvr)] = struct{}{}
 		if err := p.pollXRs(ctx, gvr); err != nil {
 			hadErrors = true
 			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
@@ -66,9 +84,23 @@ func (p *Poller) poll(ctx context.Context) {
 	}
 
 	for _, gvr := range p.cfg.ClaimGVRs {
+		centralClaimGVRs[GVRString(gvr)] = struct{}{}
 		if err := p.pollClaims(ctx, gvr); err != nil {
 			hadErrors = true
 			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
+		}
+	}
+
+	// Poll per-namespace configs (if any).
+	if p.nsConfigs != nil {
+		nsConfigs := p.nsConfigs.NamespaceConfigs()
+		metrics.NamespaceConfigs.Set(float64(len(nsConfigs)))
+
+		if len(nsConfigs) > 0 {
+			nsErrors := p.pollNamespaceConfigsList(ctx, nsConfigs, centralClaimGVRs, centralXRGVRs)
+			if nsErrors {
+				hadErrors = true
+			}
 		}
 	}
 
@@ -99,6 +131,142 @@ func (p *Poller) poll(ctx context.Context) {
 		"claims", claimCount,
 		"xrs", xrCount,
 	)
+}
+
+// pollNamespaceConfigsList polls GVRs from the given per-namespace configs.
+// Claims are scoped to the config's namespace; XRs are polled cluster-wide.
+// GVRs already covered by the central config are skipped to avoid double-counting.
+// Returns true if any errors occurred.
+func (p *Poller) pollNamespaceConfigsList(ctx context.Context, nsConfigs []config.NamespaceConfig, centralClaimGVRs, centralXRGVRs map[string]struct{}) bool {
+	slog.Debug("polling namespace configs", "count", len(nsConfigs))
+	var hadErrors bool
+
+	for _, nsCfg := range nsConfigs {
+		keys := KeysFromNamespaceConfig(&nsCfg, p.cfg)
+
+		// Poll namespace-scoped XRs first (cluster-wide) so composition data
+		// is available for claim enrichment.
+		for _, gvr := range nsCfg.XRGVRs {
+			gvrStr := GVRString(gvr)
+			if _, ok := centralXRGVRs[gvrStr]; ok {
+				// Already polled centrally — skip to avoid replacing with partial data.
+				slog.Debug("skipping namespace XR GVR (already polled centrally)",
+					"namespace", nsCfg.Namespace,
+					"gvr", gvrStr,
+				)
+				continue
+			}
+
+			if err := p.pollXRsWithKeys(ctx, gvr, "", keys); err != nil {
+				hadErrors = true
+				metrics.PollErrors.WithLabelValues(gvrStr).Inc()
+				slog.Error("failed to poll namespace XRs",
+					"gvr", gvrStr,
+					"source_namespace", nsCfg.Namespace,
+					"error", err,
+				)
+			}
+		}
+
+		// Poll namespace-scoped claims — restricted to the config's namespace.
+		for _, gvr := range nsCfg.ClaimGVRs {
+			gvrStr := GVRString(gvr)
+			if _, ok := centralClaimGVRs[gvrStr]; ok {
+				// Already polled centrally — skip.
+				slog.Debug("skipping namespace claim GVR (already polled centrally)",
+					"namespace", nsCfg.Namespace,
+					"gvr", gvrStr,
+				)
+				continue
+			}
+
+			if err := p.pollClaimsScoped(ctx, gvr, nsCfg.Namespace, keys); err != nil {
+				hadErrors = true
+				metrics.PollErrors.WithLabelValues(gvrStr).Inc()
+				slog.Error("failed to poll namespace claims",
+					"gvr", gvrStr,
+					"namespace", nsCfg.Namespace,
+					"error", err,
+				)
+			}
+		}
+	}
+
+	return hadErrors
+}
+
+// pollClaimsScoped lists claims for a GVR in a specific namespace using custom keys,
+// and updates the store.
+func (p *Poller) pollClaimsScoped(ctx context.Context, gvr schema.GroupVersionResource, namespace string, keys ConvertKeys) error {
+	gvrStr := GVRString(gvr)
+	ri := p.client.Resource(gvr).Namespace(namespace)
+
+	var claims []store.ClaimInfo
+	var continueToken string
+	for {
+		opts := metav1.ListOptions{
+			Limit:    500,
+			Continue: continueToken,
+		}
+		list, err := ri.List(ctx, opts)
+		if err != nil {
+			slog.Error("failed to list scoped claims", "gvr", gvrStr, "namespace", namespace, "error", err)
+			return err
+		}
+
+		for _, item := range list.Items {
+			claims = append(claims, UnstructuredToClaimWithKeys(item, gvr, keys))
+		}
+
+		continueToken = list.GetContinue()
+		if continueToken == "" {
+			break
+		}
+	}
+
+	p.store.ReplaceClaims(gvrStr, claims)
+	slog.Debug("namespace claims updated", "gvr", gvrStr, "namespace", namespace, "count", len(claims))
+	return nil
+}
+
+// pollXRsWithKeys lists XRs for a GVR using custom keys and updates the store.
+// If namespace is empty, lists cluster-wide.
+func (p *Poller) pollXRsWithKeys(ctx context.Context, gvr schema.GroupVersionResource, namespace string, keys ConvertKeys) error {
+	gvrStr := GVRString(gvr)
+
+	var ri dynamic.ResourceInterface
+	if namespace == "" {
+		ri = p.client.Resource(gvr)
+	} else {
+		ri = p.client.Resource(gvr).Namespace(namespace)
+	}
+
+	var xrs []store.XRInfo
+	var continueToken string
+	for {
+		opts := metav1.ListOptions{
+			Limit:    500,
+			Continue: continueToken,
+		}
+		list, err := ri.List(ctx, opts)
+		if err != nil {
+			slog.Error("failed to list XRs with keys", "gvr", gvrStr, "error", err)
+			return err
+		}
+
+		for _, item := range list.Items {
+			xrs = append(xrs, UnstructuredToXRWithKeys(item, gvr, keys))
+		}
+
+		continueToken = list.GetContinue()
+		if continueToken == "" {
+			break
+		}
+	}
+
+	p.store.ReplaceXRs(gvrStr, xrs)
+	slog.Debug("namespace XRs updated", "gvr", gvrStr, "count", len(xrs))
+	return nil
 }
 
 // pollClaims lists all claims for a given GVR and updates the store.

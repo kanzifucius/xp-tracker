@@ -25,3 +25,9 @@ rules:
   - apiGroups: ["*"]
     resources: ["*"]
     verbs: ["get", "list", "watch"]
+  # ConfigMap read access for per-namespace GVR discovery.
+  # The exporter watches ConfigMaps labeled xp-tracker.kanzi.io/config=gvrs
+  # across all namespaces to discover per-namespace GVR configurations.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]

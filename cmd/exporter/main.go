@@ -67,6 +67,12 @@ func run() error {
 		return fmt.Errorf("create Kubernetes client: %w", err)
 	}
 
+	// Create typed Kubernetes client for ConfigMap watching.
+	typedClient, err := kube.NewTypedClient()
+	if err != nil {
+		return fmt.Errorf("create typed Kubernetes client: %w", err)
+	}
+
 	// Initialise the store based on STORE_BACKEND.
 	mem := store.New()
 	var s store.Store = mem
@@ -103,6 +109,15 @@ func run() error {
 
 	// Start the polling loop.
 	poller := kube.NewPoller(client, cfg, s)
+
+	// Start the ConfigMap watcher for per-namespace configs.
+	cmWatcher := kube.NewConfigMapWatcher(typedClient, cfg)
+	stopCh := make(chan struct{})
+	go cmWatcher.Run(stopCh)
+	cmWatcher.WaitForSync(stopCh)
+	poller.SetNamespaceConfigProvider(cmWatcher)
+	slog.Info("ConfigMap watcher started and synced")
+
 	go func() {
 		slog.Info("starting poller")
 		poller.Run(ctx)
@@ -123,6 +138,7 @@ func run() error {
 
 	// Block until context is cancelled.
 	<-ctx.Done()
+	close(stopCh) // Stop the ConfigMap watcher.
 	slog.Info("shutdown complete")
 	return nil
 }

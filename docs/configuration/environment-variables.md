@@ -6,8 +6,8 @@ All xp-tracker configuration is via environment variables. There are no config f
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `CLAIM_GVRS` | Yes | -- | Comma-separated claim GVRs in `group/version/resource` format |
-| `XR_GVRS` | Yes | -- | Comma-separated XR GVRs in `group/version/resource` format |
+| `CLAIM_GVRS` | No | `""` | Comma-separated claim GVRs in `group/version/resource` format |
+| `XR_GVRS` | No | `""` | Comma-separated XR GVRs in `group/version/resource` format |
 | `KUBE_NAMESPACE_SCOPE` | No | `""` (all) | Comma-separated namespace filter |
 | `CREATOR_ANNOTATION_KEY` | No | `""` | Annotation key for claim creator attribution |
 | `TEAM_ANNOTATION_KEY` | No | `""` | Annotation key for team attribution |
@@ -28,6 +28,9 @@ Each GVR must be specified in `group/version/resource` format. The resource name
 CLAIM_GVRS="platform.example.org/v1alpha1/postgresqlinstances,platform.example.org/v1alpha1/kafkatopics"
 XR_GVRS="platform.example.org/v1alpha1/xpostgresqlinstances,platform.example.org/v1alpha1/xkafkatopics"
 ```
+
+!!! note "`CLAIM_GVRS` and `XR_GVRS` are optional"
+    These variables are no longer required. GVRs can also be configured via [per-namespace ConfigMaps](namespace-configmaps.md). You can use central environment variables, namespace ConfigMaps, or both. If neither is configured, the exporter starts with no GVRs and only polls namespace ConfigMap-defined GVRs as they appear.
 
 !!! tip "Finding your GVRs"
     Use `kubectl api-resources` to find the correct group, version, and resource name for your Crossplane types:
@@ -57,6 +60,9 @@ TEAM_ANNOTATION_KEY="myorg.io/team"
 ```
 
 If the annotation is not present on a claim, the label value will be an empty string.
+
+!!! tip "Per-namespace overrides"
+    `CREATOR_ANNOTATION_KEY` and `TEAM_ANNOTATION_KEY` can be overridden per-namespace using [per-namespace ConfigMaps](namespace-configmaps.md). Namespace ConfigMaps that omit these fields inherit the central values.
 
 ## Composition label
 

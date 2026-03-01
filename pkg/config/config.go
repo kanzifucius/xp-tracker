@@ -71,27 +71,23 @@ func Load() (*Config, error) {
 		MetricsAddr:         defaultMetricsAddr,
 	}
 
-	// Required: CLAIM_GVRS
-	claimRaw := os.Getenv("CLAIM_GVRS")
-	if claimRaw == "" {
-		return nil, fmt.Errorf("CLAIM_GVRS is required")
+	// Optional: CLAIM_GVRS (was required; now optional to support namespace-scoped ConfigMap discovery).
+	if claimRaw := os.Getenv("CLAIM_GVRS"); claimRaw != "" {
+		claimGVRs, err := ParseGVRs(claimRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CLAIM_GVRS: %w", err)
+		}
+		cfg.ClaimGVRs = claimGVRs
 	}
-	claimGVRs, err := ParseGVRs(claimRaw)
-	if err != nil {
-		return nil, fmt.Errorf("invalid CLAIM_GVRS: %w", err)
-	}
-	cfg.ClaimGVRs = claimGVRs
 
-	// Required: XR_GVRS
-	xrRaw := os.Getenv("XR_GVRS")
-	if xrRaw == "" {
-		return nil, fmt.Errorf("XR_GVRS is required")
+	// Optional: XR_GVRS (was required; now optional to support namespace-scoped ConfigMap discovery).
+	if xrRaw := os.Getenv("XR_GVRS"); xrRaw != "" {
+		xrGVRs, err := ParseGVRs(xrRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid XR_GVRS: %w", err)
+		}
+		cfg.XRGVRs = xrGVRs
 	}
-	xrGVRs, err := ParseGVRs(xrRaw)
-	if err != nil {
-		return nil, fmt.Errorf("invalid XR_GVRS: %w", err)
-	}
-	cfg.XRGVRs = xrGVRs
 
 	// Optional: KUBE_NAMESPACE_SCOPE
 	if ns := os.Getenv("KUBE_NAMESPACE_SCOPE"); ns != "" {

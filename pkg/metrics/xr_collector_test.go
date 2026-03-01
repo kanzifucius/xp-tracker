@@ -27,9 +27,9 @@ func TestXRCollector_Empty(t *testing.T) {
 func TestXRCollector_SingleComposition(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-prod", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", Composition: "comp-prod", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Source: "central", Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-prod", Source: "central", Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", Composition: "comp-prod", Source: "central", Ready: false},
 	})
 
 	c := NewXRCollector(s)
@@ -59,13 +59,14 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	assertLabel(t, labels, "kind", "XThing")
 	assertLabel(t, labels, "namespace", "")
 	assertLabel(t, labels, "composition", "comp-prod")
+	assertLabel(t, labels, "source", "central")
 }
 
 func TestXRCollector_MultipleCompositions(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-dev", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Source: "central", Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-dev", Source: "central", Ready: false},
 	})
 
 	c := NewXRCollector(s)
@@ -100,8 +101,8 @@ func TestXRCollector_Describe(t *testing.T) {
 func TestXRCollector_AllReady(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Source: "central", Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Source: "central", Ready: true},
 	})
 
 	c := NewXRCollector(s)
@@ -118,8 +119,8 @@ func TestXRCollector_AllReady(t *testing.T) {
 func TestXRCollector_NoneReady(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Ready: false},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Source: "central", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Source: "central", Ready: false},
 	})
 
 	c := NewXRCollector(s)

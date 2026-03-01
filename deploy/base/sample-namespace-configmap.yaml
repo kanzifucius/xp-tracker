@@ -1,0 +1,41 @@
+# =============================================================================
+# Sample per-namespace ConfigMap for xp-tracker
+# =============================================================================
+# Teams can create this ConfigMap in their namespace to opt into GVR monitoring
+# without modifying the central platform configuration.
+#
+# Requirements:
+#   - Must have the label: xp-tracker.kanzi.io/config: "gvrs"
+#   - Must specify at least one of CLAIM_GVRS or XR_GVRS
+#
+# Behavior:
+#   - Claims are polled ONLY within this ConfigMap's namespace
+#   - XRs are polled cluster-wide (Crossplane XRs are cluster-scoped)
+#   - CREATOR_ANNOTATION_KEY and TEAM_ANNOTATION_KEY are optional overrides;
+#     if omitted, they inherit from the central exporter config
+#   - GVRs that overlap with the central config are automatically deduplicated
+#
+# This file is NOT applied by default — copy and adapt for each namespace.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xp-tracker-gvrs
+  namespace: team-a              # <-- change to your namespace
+  labels:
+    xp-tracker.kanzi.io/config: "gvrs"
+data:
+  # Comma-separated list of claim GVRs to monitor in this namespace.
+  # Format: group/version/resource
+  CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances"
+
+  # Optional: Comma-separated list of XR GVRs to monitor cluster-wide.
+  # XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances"
+
+  # Optional: Override the annotation key used to extract the claim creator.
+  # Falls back to the central config value if omitted.
+  # CREATOR_ANNOTATION_KEY: "platform.example.org/created-by"
+
+  # Optional: Override the annotation key used to extract the team.
+  # Falls back to the central config value if omitted.
+  # TEAM_ANNOTATION_KEY: "platform.example.org/team"

@@ -155,13 +155,53 @@ func TestLoad_AllOptions(t *testing.T) {
 	}
 }
 
-func TestLoad_MissingRequired(t *testing.T) {
-	// Clear all env vars
+func TestLoad_NoGVRs(t *testing.T) {
+	// Both CLAIM_GVRS and XR_GVRS are now optional (namespace ConfigMaps can supply them).
 	setEnvs(t, map[string]string{})
 
-	_, err := Load()
-	if err == nil {
-		t.Error("expected error when CLAIM_GVRS is missing")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.ClaimGVRs) != 0 {
+		t.Errorf("expected no claim GVRs, got %d", len(cfg.ClaimGVRs))
+	}
+	if len(cfg.XRGVRs) != 0 {
+		t.Errorf("expected no XR GVRs, got %d", len(cfg.XRGVRs))
+	}
+}
+
+func TestLoad_ClaimGVRsOnly(t *testing.T) {
+	setEnvs(t, map[string]string{
+		"CLAIM_GVRS": "platform.example.org/v1alpha1/postgresqlinstances",
+	})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.ClaimGVRs) != 1 {
+		t.Errorf("expected 1 claim GVR, got %d", len(cfg.ClaimGVRs))
+	}
+	if len(cfg.XRGVRs) != 0 {
+		t.Errorf("expected no XR GVRs, got %d", len(cfg.XRGVRs))
+	}
+}
+
+func TestLoad_XRGVRsOnly(t *testing.T) {
+	setEnvs(t, map[string]string{
+		"XR_GVRS": "platform.example.org/v1alpha1/xpostgresqlinstances",
+	})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.ClaimGVRs) != 0 {
+		t.Errorf("expected no claim GVRs, got %d", len(cfg.ClaimGVRs))
+	}
+	if len(cfg.XRGVRs) != 1 {
+		t.Errorf("expected 1 XR GVR, got %d", len(cfg.XRGVRs))
 	}
 }
 

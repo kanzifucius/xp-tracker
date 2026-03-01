@@ -151,6 +151,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
   - Configuration:
       - Environment Variables: configuration/environment-variables.md
+      - Per-Namespace ConfigMaps: configuration/namespace-configmaps.md
       - Store Backends: configuration/store-backends.md
   - Metrics:
       - Reference: metrics/reference.md
