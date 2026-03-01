@@ -113,8 +113,7 @@ func run() error {
 	// Start the ConfigMap watcher for per-namespace configs.
 	cmWatcher, err := kube.NewConfigMapWatcher(typedClient, cfg)
 	if err != nil {
-		slog.Error("failed to create ConfigMap watcher", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("create ConfigMap watcher: %w", err)
 	}
 	stopCh := make(chan struct{})
 	go cmWatcher.Run(stopCh)
