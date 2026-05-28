@@ -15,7 +15,7 @@ func TestBookkeeping_Empty(t *testing.T) {
 	s := store.New()
 	handler := bookkeepingHandler(s)
 
-	req := httptest.NewRequest(http.MethodGet, "/bookkeeping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bookkeeping", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -77,7 +77,7 @@ func TestBookkeeping_WithData(t *testing.T) {
 	})
 
 	handler := bookkeepingHandler(s)
-	req := httptest.NewRequest(http.MethodGet, "/bookkeeping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bookkeeping", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -160,7 +160,7 @@ func TestBookkeeping_GeneratedAtIsUTC(t *testing.T) {
 	s := store.New()
 	handler := bookkeepingHandler(s)
 
-	req := httptest.NewRequest(http.MethodGet, "/bookkeeping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bookkeeping", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -187,7 +187,7 @@ func TestBookkeeping_ZeroCreatedAt(t *testing.T) {
 	})
 
 	handler := bookkeepingHandler(s)
-	req := httptest.NewRequest(http.MethodGet, "/bookkeeping", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bookkeeping", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

@@ -10,10 +10,10 @@ Example PromQL queries for building Grafana dashboards with xp-tracker metrics.
 sum by (namespace)(crossplane_claims_total)
 ```
 
-### Ready claims by composition
+### Ready claims by team
 
 ```promql
-sum by (composition)(crossplane_claims_ready)
+sum by (team)(crossplane_claims_ready)
 ```
 
 ### Claims by creator
@@ -49,6 +49,24 @@ sum by (team)(crossplane_claims_total)
 topk(10, sum by (creator)(crossplane_claims_total))
 ```
 
+### Claims by synced status
+
+```promql
+sum by (synced)(crossplane_claims_total)
+```
+
+### Claims by ready status label
+
+```promql
+sum by (ready)(crossplane_claims_total)
+```
+
+### Per-claim status table
+
+```promql
+max by (namespace, claim_name, synced, ready)(crossplane_claims_total)
+```
+
 ## XR queries
 
 ### All XRs grouped by kind
@@ -57,16 +75,34 @@ topk(10, sum by (creator)(crossplane_claims_total))
 sum by (kind)(crossplane_xr_total)
 ```
 
-### XR readiness ratio by composition
+### XR readiness ratio by kind
 
 ```promql
-sum by (composition)(crossplane_xr_ready) / sum by (composition)(crossplane_xr_total)
+sum by (kind)(crossplane_xr_ready) / sum by (kind)(crossplane_xr_total)
 ```
 
 ### Not-ready XRs
 
 ```promql
 sum(crossplane_xr_total) - sum(crossplane_xr_ready)
+```
+
+### XRs by synced status
+
+```promql
+sum by (synced)(crossplane_xr_total)
+```
+
+### XRs by ready status label
+
+```promql
+sum by (ready)(crossplane_xr_total)
+```
+
+### Per-XR status table
+
+```promql
+max by (name, claim_name, claim_namespace, synced, ready)(crossplane_xr_total)
 ```
 
 ## Combined queries

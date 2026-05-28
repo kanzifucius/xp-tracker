@@ -15,6 +15,8 @@ func TestXRCollector_Empty(t *testing.T) {
 	families := gatherCollector(t, c)
 	totalFam := families["crossplane_xr_total"]
 	readyFam := families["crossplane_xr_ready"]
+	statusSyncedFam := families["crossplane_xr_status_synced"]
+	statusReadyFam := families["crossplane_xr_status_ready"]
 
 	if totalFam != nil && len(totalFam.GetMetric()) > 0 {
 		t.Errorf("expected no crossplane_xr_total metrics, got %d", len(totalFam.GetMetric()))
@@ -22,14 +24,20 @@ func TestXRCollector_Empty(t *testing.T) {
 	if readyFam != nil && len(readyFam.GetMetric()) > 0 {
 		t.Errorf("expected no crossplane_xr_ready metrics, got %d", len(readyFam.GetMetric()))
 	}
+	if statusSyncedFam != nil && len(statusSyncedFam.GetMetric()) > 0 {
+		t.Errorf("expected no crossplane_xr_status_synced metrics, got %d", len(statusSyncedFam.GetMetric()))
+	}
+	if statusReadyFam != nil && len(statusReadyFam.GetMetric()) > 0 {
+		t.Errorf("expected no crossplane_xr_status_ready metrics, got %d", len(statusReadyFam.GetMetric()))
+	}
 }
 
 func TestXRCollector_SingleComposition(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-prod", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", Composition: "comp-prod", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", ClaimName: "claim-c", ClaimNS: "ns-b", Composition: "comp-prod", Synced: false, Ready: false},
 	})
 
 	c := NewXRCollector(s)
@@ -39,33 +47,46 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	if totalFam == nil {
 		t.Fatal("missing crossplane_xr_total")
 	}
-	if len(totalFam.GetMetric()) != 1 {
-		t.Fatalf("expected 1 total sample, got %d", len(totalFam.GetMetric()))
+	if len(totalFam.GetMetric()) != 3 {
+		t.Fatalf("expected 3 total samples, got %d", len(totalFam.GetMetric()))
 	}
-	if got := totalFam.GetMetric()[0].GetGauge().GetValue(); got != 3 {
-		t.Errorf("crossplane_xr_total: expected 3, got %v", got)
+	for _, metric := range totalFam.GetMetric() {
+		if got := metric.GetGauge().GetValue(); got != 1 {
+			t.Errorf("crossplane_xr_total: expected 1 per XR, got %v", got)
+		}
 	}
 
 	readyFam := families["crossplane_xr_ready"]
 	if readyFam == nil {
 		t.Fatal("missing crossplane_xr_ready")
 	}
-	if got := readyFam.GetMetric()[0].GetGauge().GetValue(); got != 2 {
-		t.Errorf("crossplane_xr_ready: expected 2, got %v", got)
+	if len(readyFam.GetMetric()) != 3 {
+		t.Fatalf("expected 3 ready samples, got %d", len(readyFam.GetMetric()))
+	}
+	var readySum float64
+	for _, metric := range readyFam.GetMetric() {
+		readySum += metric.GetGauge().GetValue()
+	}
+	if readySum != 2 {
+		t.Errorf("crossplane_xr_ready sum: expected 2, got %v", readySum)
 	}
 
-	labels := labelMap(totalFam.GetMetric()[0])
+	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "name", "xr1")
 	assertLabel(t, labels, "group", "g")
 	assertLabel(t, labels, "kind", "XThing")
 	assertLabel(t, labels, "namespace", "")
-	assertLabel(t, labels, "composition", "comp-prod")
+	assertLabel(t, labels, "name", "xr1")
+	assertLabel(t, labels, "claim_name", "claim-a")
+	assertLabel(t, labels, "claim_namespace", "ns-a")
+	assertLabel(t, labels, "synced", "true")
+	assertLabel(t, labels, "ready", "true")
 }
 
 func TestXRCollector_MultipleCompositions(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-dev", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-b", Composition: "comp-dev", Synced: false, Ready: false},
 	})
 
 	c := NewXRCollector(s)
@@ -76,7 +97,7 @@ func TestXRCollector_MultipleCompositions(t *testing.T) {
 		t.Fatal("missing crossplane_xr_total")
 	}
 	if len(totalFam.GetMetric()) != 2 {
-		t.Fatalf("expected 2 total samples (one per composition), got %d", len(totalFam.GetMetric()))
+		t.Fatalf("expected 2 total samples (one per XR), got %d", len(totalFam.GetMetric()))
 	}
 }
 
@@ -92,23 +113,29 @@ func TestXRCollector_Describe(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 descriptors, got %d", count)
+	if count != 4 {
+		t.Fatalf("expected 4 descriptors, got %d", count)
 	}
 }
 
 func TestXRCollector_AllReady(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp", Synced: true, Ready: true},
 	})
 
 	c := NewXRCollector(s)
 	families := gatherCollector(t, c)
 
-	total := families["crossplane_xr_total"].GetMetric()[0].GetGauge().GetValue()
-	ready := families["crossplane_xr_ready"].GetMetric()[0].GetGauge().GetValue()
+	var total float64
+	for _, metric := range families["crossplane_xr_total"].GetMetric() {
+		total += metric.GetGauge().GetValue()
+	}
+	var ready float64
+	for _, metric := range families["crossplane_xr_ready"].GetMetric() {
+		ready += metric.GetGauge().GetValue()
+	}
 
 	if total != ready {
 		t.Errorf("all XRs ready: total=%v, ready=%v should be equal", total, ready)
@@ -118,15 +145,21 @@ func TestXRCollector_AllReady(t *testing.T) {
 func TestXRCollector_NoneReady(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Ready: false},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp", Synced: false, Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp", Synced: false, Ready: false},
 	})
 
 	c := NewXRCollector(s)
 	families := gatherCollector(t, c)
 
-	total := families["crossplane_xr_total"].GetMetric()[0].GetGauge().GetValue()
-	ready := families["crossplane_xr_ready"].GetMetric()[0].GetGauge().GetValue()
+	var total float64
+	for _, metric := range families["crossplane_xr_total"].GetMetric() {
+		total += metric.GetGauge().GetValue()
+	}
+	var ready float64
+	for _, metric := range families["crossplane_xr_ready"].GetMetric() {
+		ready += metric.GetGauge().GetValue()
+	}
 
 	if total != 2 {
 		t.Errorf("total: expected 2, got %v", total)
