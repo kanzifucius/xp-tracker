@@ -58,9 +58,7 @@
 
     # Install your XRDs and Compositions, then create some claims
 
-    # Run the exporter locally
-    export CLAIM_GVRS="your.org/v1alpha1/yourclaims"
-    export XR_GVRS="your.org/v1alpha1/yourxrs"
+    # Run the exporter locally (discovery is automatic from installed XRDs)
     make run
     ```
 
@@ -71,8 +69,7 @@
 make build
 
 # Run against a local cluster (uses KUBECONFIG or ~/.kube/config)
-export CLAIM_GVRS="samples.xptracker.dev/v1alpha1/widgets,samples.xptracker.dev/v1alpha1/gadgets"
-export XR_GVRS="samples.xptracker.dev/v1alpha1/xwidgets,samples.xptracker.dev/v1alpha1/xgadgets"
+# Ensure your XRDs are installed in the cluster.
 export CREATOR_ANNOTATION_KEY="xptracker.dev/created-by"
 export TEAM_ANNOTATION_KEY="xptracker.dev/team"
 export POLL_INTERVAL_SECONDS=10

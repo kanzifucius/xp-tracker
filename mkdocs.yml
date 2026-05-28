@@ -155,6 +155,7 @@ nav:
   - Metrics:
       - Reference: metrics/reference.md
       - Grafana Queries: metrics/grafana-queries.md
+      - Prometheus Alerts: metrics/prometheus-alerts.md
   - Deployment:
       - Kustomize: deployment/kustomize.md
       - RBAC: deployment/rbac.md

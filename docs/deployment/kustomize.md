@@ -15,7 +15,7 @@ The base at `deploy/base/` includes:
 | `deployment.yaml` | Single-replica Deployment |
 | `service.yaml` | Service exposing port 8080 (`metrics`) |
 
-The base deploys to the `crossplane-system` namespace and includes placeholder GVRs that must be overridden.
+The base deploys to the `crossplane-system` namespace and discovers claim/XR GVRs from XRDs at startup.
 
 ```bash
 # Review rendered manifests
@@ -29,7 +29,7 @@ kubectl apply -k deploy/base
 
 The example overlay at `deploy/overlays/example/` demonstrates:
 
-- Patching the ConfigMap with real GVRs and annotation keys
+- Patching the ConfigMap with annotation keys (and optional static GVR overrides)
 - Adding a `ServiceMonitor` for Prometheus Operator
 - Pinning the container image tag
 
@@ -63,8 +63,9 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       data:
-        CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
-        XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
+        # Optional static overrides (deprecated):
+        # CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
+        # XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
         CREATOR_ANNOTATION_KEY: "myorg.io/created-by"
         TEAM_ANNOTATION_KEY: "myorg.io/team"
 

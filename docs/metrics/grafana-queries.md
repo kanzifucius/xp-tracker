@@ -2,6 +2,8 @@
 
 Example PromQL queries for building Grafana dashboards with xp-tracker metrics.
 
+For alerting rules and ready-to-use `PrometheusRule` examples, see [Prometheus Alerts](prometheus-alerts.md).
+
 ## Claim queries
 
 ### Total claims by namespace

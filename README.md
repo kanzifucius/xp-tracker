@@ -30,7 +30,7 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 - **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, `namespace`, and `composition`. These are the dimensions that matter when you're running a platform, not just an operator.
 - **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which compositions are most adopted?" -- all via standard PromQL queries and Grafana dashboards.
 - **Chargeback and showback** -- The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
-- **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. Just configure your GVRs as environment variables and deploy.
+- **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs at startup.
 - **JSON bookkeeping endpoint** -- Beyond Prometheus, the `/bookkeeping` endpoint returns a full snapshot of all tracked resources as JSON. Useful for CLI tooling, external integrations, audit trails, or any consumer that doesn't want to go through PromQL.
 
 ### Standard Crossplane metrics vs xp-tracker
@@ -74,7 +74,7 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
                                 |
                        +--------v--------+
                        |     Poller      |  polls every N seconds
-                       |  (pkg/kube)     |  for each configured GVR
+                       |  (pkg/kube)     |  for each discovered GVR
                        +--------+--------+  skips Persist on errors
                                 |
                        ReplaceClaims / ReplaceXRs
@@ -164,12 +164,13 @@ The snapshot is a single JSON file at `s3://<bucket>/<prefix>/snapshot.json`, ov
 
 ## Configuration
 
-All configuration is via environment variables.
+xp-tracker discovers claim and XR GVRs from Crossplane `CompositeResourceDefinition` objects at startup.
+Environment variables are still used for namespace filtering, annotation/label keys, polling cadence, server address, and optional static GVR overrides.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `CLAIM_GVRS` | yes | -- | Comma-separated claim GVRs (`group/version/resource`) |
-| `XR_GVRS` | yes | -- | Comma-separated XR GVRs |
+| `CLAIM_GVRS` | no (deprecated) | `""` | Optional static claim GVR override (`group/version/resource`) |
+| `XR_GVRS` | no (deprecated) | `""` | Optional static XR GVR override |
 | `KUBE_NAMESPACE_SCOPE` | no | `""` (all) | Comma-separated namespace filter |
 | `CREATOR_ANNOTATION_KEY` | no | `""` | Annotation key for claim creator |
 | `TEAM_ANNOTATION_KEY` | no | `""` | Annotation key for claim team |
@@ -182,9 +183,20 @@ All configuration is via environment variables.
 | `S3_REGION` | no | `us-east-1` | AWS region for S3 client |
 | `S3_ENDPOINT` | no | `""` | Custom S3 endpoint (MinIO, LocalStack) |
 
-### GVR format
+### XRD discovery
 
-Each GVR must be in `group/version/resource` format. For example:
+At startup, xp-tracker lists XRDs (`apiextensions.crossplane.io/v1`, `compositeresourcedefinitions`) and derives:
+
+1. XR GVR from `spec.group` + selected `spec.versions[].name` + `spec.names.plural`
+2. Claim GVR from `spec.group` + selected `spec.versions[].name` + `spec.claimNames.plural` (when present)
+
+Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
+
+If no claim or XR GVRs can be discovered from XRDs, startup fails with a clear error.
+
+### Static GVR overrides (deprecated)
+
+Static overrides use `group/version/resource` format. For example:
 
 ```
 CLAIM_GVRS=platform.example.org/v1alpha1/postgresqlinstances,platform.example.org/v1alpha1/kafkatopics
@@ -363,7 +375,7 @@ kubectl apply -k deploy/base
 
 ### Using the example overlay
 
-The example overlay shows how to customise GVRs, add a ServiceMonitor, and pin the image tag:
+The example overlay shows how to customise attribution labels, add a ServiceMonitor, and pin the image tag:
 
 ```bash
 # Review
@@ -397,8 +409,9 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       data:
-        CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
-        XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
+        # Optional static overrides (deprecated):
+        # CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
+        # XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
         CREATOR_ANNOTATION_KEY: "myorg.io/created-by"
         TEAM_ANNOTATION_KEY: "myorg.io/team"
 
@@ -481,6 +494,26 @@ sum by (namespace)(crossplane_claims_total) - sum by (namespace)(crossplane_clai
 # All XRs grouped by kind
 sum by (kind)(crossplane_xr_total)
 ```
+
+## Potential Prometheus Alerts
+
+Alongside dashboards, you should define alert rules for exporter health and resource readiness. A practical baseline is:
+
+```promql
+# Polling errors detected
+increase(xp_tracker_poll_errors_total[10m]) > 0
+
+# Poll duration p99 too high (tune threshold for your poll interval)
+histogram_quantile(0.99, sum by (le) (rate(xp_tracker_poll_duration_seconds_bucket[15m]))) > 20
+
+# Claim readiness ratio degraded
+(sum(crossplane_claims_ready) / sum(crossplane_claims_total)) < 0.8
+
+# XR readiness ratio degraded
+(sum(crossplane_xr_ready) / sum(crossplane_xr_total)) < 0.8
+```
+
+For a production-ready `PrometheusRule` manifest with severities, `for` windows, and tuning guidance, see [`docs/metrics/prometheus-alerts.md`](docs/metrics/prometheus-alerts.md).
 
 ## Docker
 
@@ -568,8 +601,7 @@ This triggers the release workflow, which:
 make build
 
 # Run against a local cluster (uses KUBECONFIG or ~/.kube/config)
-export CLAIM_GVRS="platform.example.org/v1alpha1/postgresqlinstances"
-export XR_GVRS="platform.example.org/v1alpha1/xpostgresqlinstances"
+# Ensure your XRDs are already installed in the cluster.
 export POLL_INTERVAL_SECONDS=10
 ./bin/xp-tracker
 
@@ -604,9 +636,7 @@ kindplane up
 # Apply sample XRDs, Compositions, and Claims (8 claims across 3 namespaces)
 make samples-apply
 
-# Run the exporter against the sample resources
-export CLAIM_GVRS="samples.xptracker.dev/v1alpha1/widgets,samples.xptracker.dev/v1alpha1/gadgets"
-export XR_GVRS="samples.xptracker.dev/v1alpha1/xwidgets,samples.xptracker.dev/v1alpha1/xgadgets"
+# Run the exporter against the sample resources (discovered automatically from XRDs)
 export CREATOR_ANNOTATION_KEY="xptracker.dev/created-by"
 export TEAM_ANNOTATION_KEY="xptracker.dev/team"
 make run
@@ -637,8 +667,6 @@ helm install crossplane crossplane-stable/crossplane --namespace crossplane-syst
 # Install your XRDs and Compositions, then create some claims
 
 # Run the exporter locally
-export CLAIM_GVRS="your.org/v1alpha1/yourclaims"
-export XR_GVRS="your.org/v1alpha1/yourxrs"
 make run
 ```
 
@@ -693,7 +721,8 @@ make run
 ### No metrics are returned
 
 - Check the exporter logs for polling errors: `kubectl logs -n crossplane-system deploy/crossplane-metrics-exporter`
-- Verify the `CLAIM_GVRS` and `XR_GVRS` values match your installed CRDs: `kubectl api-resources | grep your-group`
+- Verify your XRDs are installed and healthy: `kubectl get compositeresourcedefinitions.apiextensions.crossplane.io`
+- If you use deprecated static overrides, confirm `CLAIM_GVRS` and `XR_GVRS` match your installed CRDs.
 - If using `KUBE_NAMESPACE_SCOPE`, ensure the namespaces exist and contain claims
 
 ### Metrics show 0 for ready counts
@@ -702,7 +731,7 @@ make run
 
 ### RBAC errors in logs
 
-- The ClusterRole needs `get` and `list` permissions for all configured GVRs. Check your ClusterRole rules match the API groups and resources in `CLAIM_GVRS` and `XR_GVRS`.
+- The ClusterRole needs `get` and `list` permissions for discovered claim/XR resources and `compositeresourcedefinitions.apiextensions.crossplane.io`.
 
 ### Stale metrics after deleting resources
 

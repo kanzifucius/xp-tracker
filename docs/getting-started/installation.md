@@ -14,7 +14,7 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Kustomize Base"
 
-    The recommended way to deploy xp-tracker. The base deploys to the `crossplane-system` namespace with placeholder GVRs that you must override:
+    The recommended way to deploy xp-tracker. The base deploys to the `crossplane-system` namespace and discovers claim/XR GVRs from XRDs at startup:
 
     ```bash
     # Review what will be applied
@@ -26,7 +26,7 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Kustomize Overlay"
 
-    The example overlay demonstrates how to customise GVRs, add a ServiceMonitor, and pin the image tag:
+    The example overlay demonstrates how to customise annotation keys, add a ServiceMonitor, and pin the image tag:
 
     ```bash
     kubectl apply -k deploy/overlays/example
