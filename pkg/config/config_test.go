@@ -155,13 +155,19 @@ func TestLoad_AllOptions(t *testing.T) {
 	}
 }
 
-func TestLoad_MissingRequired(t *testing.T) {
+func TestLoad_WithoutStaticGVRs(t *testing.T) {
 	// Clear all env vars
 	setEnvs(t, map[string]string{})
 
-	_, err := Load()
-	if err == nil {
-		t.Error("expected error when CLAIM_GVRS is missing")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error without static GVRs: %v", err)
+	}
+	if len(cfg.ClaimGVRs) != 0 {
+		t.Errorf("expected zero claim GVRs, got %d", len(cfg.ClaimGVRs))
+	}
+	if len(cfg.XRGVRs) != 0 {
+		t.Errorf("expected zero XR GVRs, got %d", len(cfg.XRGVRs))
 	}
 }
 
