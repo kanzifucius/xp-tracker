@@ -51,7 +51,8 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 		}
 	}
 
-	// Extract Ready condition.
+	// Extract standard Crossplane status conditions.
+	claim.Synced = extractConditionStatus(obj.Object, "Synced")
 	claim.Ready, claim.Reason = extractReadyCondition(obj.Object)
 
 	return claim
@@ -77,7 +78,8 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		xr.Composition = obj.GetLabels()[cfg.CompositionLabelKey]
 	}
 
-	// Extract Ready condition.
+	// Extract standard Crossplane status conditions.
+	xr.Synced = extractConditionStatus(obj.Object, "Synced")
 	xr.Ready, xr.Reason = extractReadyCondition(obj.Object)
 
 	return xr
@@ -106,6 +108,29 @@ func extractReadyCondition(obj map[string]interface{}) (bool, string) {
 	}
 
 	return false, ""
+}
+
+// extractConditionStatus finds a condition type in status.conditions and returns whether its status is True.
+func extractConditionStatus(obj map[string]interface{}, conditionType string) bool {
+	conditions, found, err := unstructured.NestedSlice(obj, "status", "conditions")
+	if err != nil || !found {
+		return false
+	}
+
+	for _, c := range conditions {
+		cond, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		condType, _ := cond["type"].(string)
+		if condType != conditionType {
+			continue
+		}
+		status, _ := cond["status"].(string)
+		return strings.EqualFold(status, "True")
+	}
+
+	return false
 }
 
 // nestedString safely extracts a nested string field from an unstructured object.

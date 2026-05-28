@@ -17,6 +17,8 @@ func TestClaimCollector_Empty(t *testing.T) {
 	// With an empty store, no metrics should be emitted.
 	totalFam := families["crossplane_claims_total"]
 	readyFam := families["crossplane_claims_ready"]
+	statusSyncedFam := families["crossplane_claims_status_synced"]
+	statusReadyFam := families["crossplane_claims_status_ready"]
 
 	if totalFam != nil && len(totalFam.GetMetric()) > 0 {
 		t.Errorf("expected no crossplane_claims_total metrics, got %d", len(totalFam.GetMetric()))
@@ -24,62 +26,92 @@ func TestClaimCollector_Empty(t *testing.T) {
 	if readyFam != nil && len(readyFam.GetMetric()) > 0 {
 		t.Errorf("expected no crossplane_claims_ready metrics, got %d", len(readyFam.GetMetric()))
 	}
+	if statusSyncedFam != nil && len(statusSyncedFam.GetMetric()) > 0 {
+		t.Errorf("expected no crossplane_claims_status_synced metrics, got %d", len(statusSyncedFam.GetMetric()))
+	}
+	if statusReadyFam != nil && len(statusReadyFam.GetMetric()) > 0 {
+		t.Errorf("expected no crossplane_claims_status_ready metrics, got %d", len(statusReadyFam.GetMetric()))
+	}
 }
 
 func TestClaimCollector_SingleGroup(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Creator: "alice", Team: "backend", Composition: "comp-a", Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Creator: "alice", Team: "backend", Composition: "comp-a", Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Creator: "alice", Team: "backend", Composition: "comp-a", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: true, Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: false, Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: true, Ready: true},
 	})
 
 	c := NewClaimCollector(s)
 	families := gatherCollector(t, c)
 
-	// All 3 claims share the same label tuple -> 1 sample per metric family.
+	// claim_name and status labels create one sample per claim.
 	totalFam := families["crossplane_claims_total"]
 	if totalFam == nil {
 		t.Fatal("missing crossplane_claims_total")
 	}
-	if len(totalFam.GetMetric()) != 1 {
-		t.Fatalf("expected 1 total sample, got %d", len(totalFam.GetMetric()))
+	if len(totalFam.GetMetric()) != 3 {
+		t.Fatalf("expected 3 total samples, got %d", len(totalFam.GetMetric()))
 	}
-	if got := totalFam.GetMetric()[0].GetGauge().GetValue(); got != 3 {
-		t.Errorf("crossplane_claims_total: expected 3, got %v", got)
+	for _, metric := range totalFam.GetMetric() {
+		if got := metric.GetGauge().GetValue(); got != 1 {
+			t.Errorf("crossplane_claims_total: expected 1 per claim, got %v", got)
+		}
 	}
 
 	readyFam := families["crossplane_claims_ready"]
 	if readyFam == nil {
 		t.Fatal("missing crossplane_claims_ready")
 	}
-	if got := readyFam.GetMetric()[0].GetGauge().GetValue(); got != 2 {
-		t.Errorf("crossplane_claims_ready: expected 2, got %v", got)
+	if len(readyFam.GetMetric()) != 3 {
+		t.Fatalf("expected 3 ready samples, got %d", len(readyFam.GetMetric()))
+	}
+	var readySum float64
+	for _, metric := range readyFam.GetMetric() {
+		readySum += metric.GetGauge().GetValue()
+	}
+	if readySum != 2 {
+		t.Errorf("crossplane_claims_ready sum: expected 2, got %v", readySum)
 	}
 
-	// Verify labels.
-	labels := labelMap(totalFam.GetMetric()[0])
+	// Verify labels for claim "a".
+	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "claim_name", "a")
 	assertLabel(t, labels, "group", "g")
 	assertLabel(t, labels, "kind", "Thing")
 	assertLabel(t, labels, "namespace", "ns1")
 	assertLabel(t, labels, "composition", "comp-a")
 	assertLabel(t, labels, "creator", "alice")
 	assertLabel(t, labels, "team", "backend")
+	assertLabel(t, labels, "claim_name", "a")
+	assertLabel(t, labels, "synced", "true")
+	assertLabel(t, labels, "ready", "true")
+
+	statusSyncedFam := families["crossplane_claims_status_synced"]
+	if statusSyncedFam == nil {
+		t.Fatal("missing crossplane_claims_status_synced")
+	}
+	var syncedSum float64
+	for _, metric := range statusSyncedFam.GetMetric() {
+		syncedSum += metric.GetGauge().GetValue()
+	}
+	if syncedSum != 2 {
+		t.Errorf("crossplane_claims_status_synced sum: expected 2, got %v", syncedSum)
+	}
 }
 
 func TestClaimCollector_MultipleGroups(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Synced: true, Ready: true},
 	})
 	s.ReplaceClaims("g/v1/widgets", []store.ClaimInfo{
-		{GVR: "g/v1/widgets", Group: "g", Kind: "Widget", Namespace: "ns2", Name: "b", Ready: false},
+		{GVR: "g/v1/widgets", Group: "g", Kind: "Widget", Namespace: "ns2", Name: "b", Synced: false, Ready: false},
 	})
 
 	c := NewClaimCollector(s)
 	families := gatherCollector(t, c)
 
-	// 2 distinct label tuples -> 2 samples per metric family.
+	// 2 claims -> 2 samples per metric family.
 	totalFam := families["crossplane_claims_total"]
 	if totalFam == nil {
 		t.Fatal("missing crossplane_claims_total")
@@ -107,6 +139,9 @@ func TestClaimCollector_EmptyLabels(t *testing.T) {
 	assertLabel(t, labels, "creator", "")
 	assertLabel(t, labels, "team", "")
 	assertLabel(t, labels, "composition", "")
+	assertLabel(t, labels, "claim_name", "a")
+	assertLabel(t, labels, "synced", "false")
+	assertLabel(t, labels, "ready", "false")
 }
 
 func TestClaimCollector_Describe(t *testing.T) {
@@ -121,26 +156,32 @@ func TestClaimCollector_Describe(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 descriptors, got %d", count)
+	if count != 4 {
+		t.Fatalf("expected 4 descriptors, got %d", count)
 	}
 }
 
 func TestClaimCollector_ReadySubsetOfTotal(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "d", Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "e", Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Synced: true, Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Synced: true, Ready: true},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Synced: false, Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "d", Synced: false, Ready: false},
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "e", Synced: true, Ready: false},
 	})
 
 	c := NewClaimCollector(s)
 	families := gatherCollector(t, c)
 
-	total := families["crossplane_claims_total"].GetMetric()[0].GetGauge().GetValue()
-	ready := families["crossplane_claims_ready"].GetMetric()[0].GetGauge().GetValue()
+	var total float64
+	for _, metric := range families["crossplane_claims_total"].GetMetric() {
+		total += metric.GetGauge().GetValue()
+	}
+	var ready float64
+	for _, metric := range families["crossplane_claims_ready"].GetMetric() {
+		ready += metric.GetGauge().GetValue()
+	}
 
 	if total != 5 {
 		t.Errorf("total: expected 5, got %v", total)
@@ -151,6 +192,18 @@ func TestClaimCollector_ReadySubsetOfTotal(t *testing.T) {
 	if ready > total {
 		t.Error("ready should never exceed total")
 	}
+}
+
+func findLabelsByLabelValue(t *testing.T, metrics []*dto.Metric, name, value string) map[string]string {
+	t.Helper()
+	for _, metric := range metrics {
+		labels := labelMap(metric)
+		if labels[name] == value {
+			return labels
+		}
+	}
+	t.Fatalf("could not find metric with label %q=%q", name, value)
+	return nil
 }
 
 // --- helpers ---

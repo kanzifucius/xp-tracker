@@ -53,6 +53,10 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 			"status": map[string]interface{}{
 				"conditions": []interface{}{
 					map[string]interface{}{
+						"type":   "Synced",
+						"status": "True",
+					},
+					map[string]interface{}{
 						"type":   "Ready",
 						"status": "True",
 						"reason": "Available",
@@ -96,6 +100,9 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 	}
 	if !claim.Ready {
 		t.Error("expected Ready=true")
+	}
+	if !claim.Synced {
+		t.Error("expected Synced=true")
 	}
 	if claim.Reason != "Available" {
 		t.Errorf("Reason: got %q", claim.Reason)
@@ -205,6 +212,9 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 	if xr.Ready {
 		t.Error("expected Ready=false")
 	}
+	if !xr.Synced {
+		t.Error("expected Synced=true")
+	}
 	if xr.Reason != "Unavailable" {
 		t.Errorf("Reason: got %q", xr.Reason)
 	}
@@ -225,6 +235,9 @@ func TestUnstructuredToXR_NoConditions(t *testing.T) {
 	}
 
 	xr := UnstructuredToXR(*obj, gvr, cfg)
+	if xr.Synced {
+		t.Error("expected Synced=false when no status")
+	}
 	if xr.Ready {
 		t.Error("expected Ready=false when no status")
 	}
@@ -275,6 +288,27 @@ func TestExtractReadyCondition_NoConditions(t *testing.T) {
 	}
 	if reason != "" {
 		t.Errorf("expected empty reason, got %q", reason)
+	}
+}
+
+func TestExtractConditionStatus(t *testing.T) {
+	obj := map[string]interface{}{
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Synced", "status": "True"},
+				map[string]interface{}{"type": "Ready", "status": "False"},
+			},
+		},
+	}
+
+	if !extractConditionStatus(obj, "Synced") {
+		t.Error("expected Synced=true")
+	}
+	if extractConditionStatus(obj, "Ready") {
+		t.Error("expected Ready=false")
+	}
+	if extractConditionStatus(obj, "Healthy") {
+		t.Error("expected Healthy=false for missing condition")
 	}
 }
 

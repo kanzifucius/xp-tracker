@@ -197,10 +197,14 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 
 | Metric | Type | Labels | Description |
 |---|---|---|---|
-| `crossplane_claims_total` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team` | Total number of claims |
-| `crossplane_claims_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team` | Number of claims with Ready=True |
-| `crossplane_xr_total` | Gauge | `group`, `kind`, `namespace`, `composition` | Total number of XRs |
-| `crossplane_xr_ready` | Gauge | `group`, `kind`, `namespace`, `composition` | Number of XRs with Ready=True |
+| `crossplane_claims_total` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team`, `claim_name`, `synced`, `ready` | Total number of claims |
+| `crossplane_claims_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team`, `claim_name`, `synced`, `ready` | Number of claims with Ready=True |
+| `crossplane_claims_status_synced` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team`, `claim_name`, `synced`, `ready` | Per-claim Synced status (1=true, 0=false) |
+| `crossplane_claims_status_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `creator`, `team`, `claim_name`, `synced`, `ready` | Per-claim Ready status (1=true, 0=false) |
+| `crossplane_xr_total` | Gauge | `group`, `kind`, `namespace`, `composition`, `name`, `synced`, `ready` | Total number of XRs |
+| `crossplane_xr_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `name`, `synced`, `ready` | Number of XRs with Ready=True |
+| `crossplane_xr_status_synced` | Gauge | `group`, `kind`, `namespace`, `composition`, `name`, `synced`, `ready` | Per-XR Synced status (1=true, 0=false) |
+| `crossplane_xr_status_ready` | Gauge | `group`, `kind`, `namespace`, `composition`, `name`, `synced`, `ready` | Per-XR Ready status (1=true, 0=false) |
 
 ### Label details
 
@@ -210,36 +214,44 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 - **composition** -- Crossplane Composition name, extracted from the `COMPOSITION_LABEL_KEY` label on XRs and enriched onto claims via `spec.resourceRef`
 - **creator** -- Value of the annotation specified by `CREATOR_ANNOTATION_KEY` (claims only)
 - **team** -- Value of the annotation specified by `TEAM_ANNOTATION_KEY` (claims only)
+- **claim_name** -- Claim metadata name (claims only)
+- **synced** -- Crossplane `Synced` condition as a label (`true`/`false`, claims only)
+- **ready** -- Crossplane `Ready` condition as a label (`true`/`false`, claims only)
+- **name** -- XR metadata name (XRs only)
 
 ### Example output
 
 Output from `curl localhost:8080/metrics` with the sample resources applied (`make samples-apply`):
 
 ```
-# HELP crossplane_claims_ready Number of Ready Crossplane claims by group, kind, namespace, composition and creator.
+# HELP crossplane_claims_ready Number of Ready Crossplane claims by group, kind, namespace, composition, creator, claim_name, and status.
 # TYPE crossplane_claims_ready gauge
-crossplane_claims_ready{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 0
-crossplane_claims_ready{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",team="platform"} 0
-crossplane_claims_ready{composition="",creator="bob@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 0
-crossplane_claims_ready{composition="",creator="carol@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 0
-crossplane_claims_ready{composition="",creator="dave@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 0
-crossplane_claims_ready{composition="",creator="eve@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-gamma",team="data"} 0
-# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, composition and creator.
+crossplane_claims_ready{claim_name="widget-a",composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+crossplane_claims_ready{claim_name="gadget-a",composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",ready="false",synced="true",team="platform"} 0
+# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, composition, creator, claim_name, and status.
 # TYPE crossplane_claims_total gauge
-crossplane_claims_total{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 1
-crossplane_claims_total{composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",team="platform"} 2
-crossplane_claims_total{composition="",creator="bob@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 1
-crossplane_claims_total{composition="",creator="carol@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-beta",team="backend"} 1
-crossplane_claims_total{composition="",creator="dave@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",team="platform"} 1
-crossplane_claims_total{composition="",creator="eve@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-gamma",team="data"} 2
-# HELP crossplane_xr_ready Number of Ready Crossplane XRs by group, kind, namespace and composition.
+crossplane_claims_total{claim_name="widget-a",composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+crossplane_claims_total{claim_name="gadget-a",composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",ready="false",synced="true",team="platform"} 1
+# HELP crossplane_claims_status_synced Synced status for Crossplane claims (1=true, 0=false).
+# TYPE crossplane_claims_status_synced gauge
+crossplane_claims_status_synced{claim_name="widget-a",composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+# HELP crossplane_claims_status_ready Ready status for Crossplane claims (1=true, 0=false).
+# TYPE crossplane_claims_status_ready gauge
+crossplane_claims_status_ready{claim_name="widget-a",composition="",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+# HELP crossplane_xr_ready Number of Ready Crossplane XRs by group, kind, namespace, composition, name, and status.
 # TYPE crossplane_xr_ready gauge
-crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XGadget",namespace=""} 0
-crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XWidget",namespace=""} 0
-# HELP crossplane_xr_total Number of Crossplane composite resources (XRs) by group, kind, namespace and composition.
+crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 0
+crossplane_xr_ready{composition="",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
+# HELP crossplane_xr_total Number of Crossplane composite resources (XRs) by group, kind, namespace, composition, name, and status.
 # TYPE crossplane_xr_total gauge
-crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XGadget",namespace=""} 4
-crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XWidget",namespace=""} 4
+crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 1
+crossplane_xr_total{composition="",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
+# HELP crossplane_xr_status_synced Synced status for Crossplane XRs (1=true, 0=false).
+# TYPE crossplane_xr_status_synced gauge
+crossplane_xr_status_synced{composition="",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 1
+# HELP crossplane_xr_status_ready Ready status for Crossplane XRs (1=true, 0=false).
+# TYPE crossplane_xr_status_ready gauge
+crossplane_xr_status_ready{composition="",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
 ```
 
 ## Bookkeeping JSON Endpoint

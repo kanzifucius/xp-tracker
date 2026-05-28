@@ -49,6 +49,24 @@ sum by (team)(crossplane_claims_total)
 topk(10, sum by (creator)(crossplane_claims_total))
 ```
 
+### Claims by synced status
+
+```promql
+sum by (synced)(crossplane_claims_total)
+```
+
+### Claims by ready status label
+
+```promql
+sum by (ready)(crossplane_claims_total)
+```
+
+### Per-claim status table
+
+```promql
+max by (namespace, claim_name, synced, ready)(crossplane_claims_total)
+```
+
 ## XR queries
 
 ### All XRs grouped by kind
@@ -67,6 +85,24 @@ sum by (composition)(crossplane_xr_ready) / sum by (composition)(crossplane_xr_t
 
 ```promql
 sum(crossplane_xr_total) - sum(crossplane_xr_ready)
+```
+
+### XRs by synced status
+
+```promql
+sum by (synced)(crossplane_xr_total)
+```
+
+### XRs by ready status label
+
+```promql
+sum by (ready)(crossplane_xr_total)
+```
+
+### Per-XR status table
+
+```promql
+max by (name, composition, synced, ready)(crossplane_xr_total)
 ```
 
 ## Combined queries
