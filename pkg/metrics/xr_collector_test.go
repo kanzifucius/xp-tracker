@@ -35,9 +35,9 @@ func TestXRCollector_Empty(t *testing.T) {
 func TestXRCollector_SingleComposition(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Synced: true, Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-prod", Synced: true, Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", Composition: "comp-prod", Synced: false, Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", ClaimName: "claim-c", ClaimNS: "ns-b", Composition: "comp-prod", Synced: false, Ready: false},
 	})
 
 	c := NewXRCollector(s)
@@ -75,8 +75,9 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	assertLabel(t, labels, "group", "g")
 	assertLabel(t, labels, "kind", "XThing")
 	assertLabel(t, labels, "namespace", "")
-	assertLabel(t, labels, "composition", "comp-prod")
 	assertLabel(t, labels, "name", "xr1")
+	assertLabel(t, labels, "claim_name", "claim-a")
+	assertLabel(t, labels, "claim_namespace", "ns-a")
 	assertLabel(t, labels, "synced", "true")
 	assertLabel(t, labels, "ready", "true")
 }
@@ -84,8 +85,8 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 func TestXRCollector_MultipleCompositions(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp-prod", Synced: true, Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp-dev", Synced: false, Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-b", Composition: "comp-dev", Synced: false, Ready: false},
 	})
 
 	c := NewXRCollector(s)
@@ -120,8 +121,8 @@ func TestXRCollector_Describe(t *testing.T) {
 func TestXRCollector_AllReady(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Synced: true, Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp", Synced: true, Ready: true},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp", Synced: true, Ready: true},
 	})
 
 	c := NewXRCollector(s)
@@ -144,8 +145,8 @@ func TestXRCollector_AllReady(t *testing.T) {
 func TestXRCollector_NoneReady(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", Composition: "comp", Synced: false, Ready: false},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", Composition: "comp", Synced: false, Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp", Synced: false, Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp", Synced: false, Ready: false},
 	})
 
 	c := NewXRCollector(s)

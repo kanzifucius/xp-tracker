@@ -59,8 +59,8 @@ func TestServer_MetricsEndpoint_Integration(t *testing.T) {
 		{GVR: "platform.example.org/v1alpha1/postgresqlinstances", Group: "platform.example.org", Kind: "PostgreSQLInstance", Namespace: "team-b", Name: "db-3", Creator: "carol", Team: "frontend", Composition: "dev-pg", Ready: true},
 	})
 	s.ReplaceXRs("platform.example.org/v1alpha1/xpostgresqlinstances", []store.XRInfo{
-		{GVR: "platform.example.org/v1alpha1/xpostgresqlinstances", Group: "platform.example.org", Kind: "XPostgreSQLInstance", Name: "xr-1", Composition: "prod-pg", Synced: true, Ready: true},
-		{GVR: "platform.example.org/v1alpha1/xpostgresqlinstances", Group: "platform.example.org", Kind: "XPostgreSQLInstance", Name: "xr-2", Composition: "dev-pg", Synced: false, Ready: false},
+		{GVR: "platform.example.org/v1alpha1/xpostgresqlinstances", Group: "platform.example.org", Kind: "XPostgreSQLInstance", Name: "xr-1", ClaimName: "dbx-ws-aaip-1-1", ClaimNS: "data-and-ai", Composition: "prod-pg", Synced: true, Ready: true},
+		{GVR: "platform.example.org/v1alpha1/xpostgresqlinstances", Group: "platform.example.org", Kind: "XPostgreSQLInstance", Name: "xr-2", ClaimName: "dbx-ws-aaip-1-2", ClaimNS: "data-and-ai", Composition: "dev-pg", Synced: false, Ready: false},
 	})
 
 	baseURL, cancel := startTestServer(t, s)
@@ -101,7 +101,6 @@ func TestServer_MetricsEndpoint_Integration(t *testing.T) {
 		`group="platform.example.org"`,
 		`kind="PostgreSQLInstance"`,
 		`namespace="team-a"`,
-		`composition="prod-pg"`,
 		`creator="alice"`,
 		`team="backend"`,
 		`claim_name="db-1"`,
@@ -109,6 +108,8 @@ func TestServer_MetricsEndpoint_Integration(t *testing.T) {
 		`ready="true"`,
 		`kind="XPostgreSQLInstance"`,
 		`name="xr-1"`,
+		`claim_name="dbx-ws-aaip-1-1"`,
+		`claim_namespace="data-and-ai"`,
 	}
 	for _, label := range expectedLabels {
 		if !strings.Contains(text, label) {

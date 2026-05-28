@@ -74,9 +74,12 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	}
 
 	// Extract composition label.
+	labels := obj.GetLabels()
 	if cfg.CompositionLabelKey != "" {
-		xr.Composition = obj.GetLabels()[cfg.CompositionLabelKey]
+		xr.Composition = labels[cfg.CompositionLabelKey]
 	}
+	xr.ClaimName = labels["crossplane.io/claim-name"]
+	xr.ClaimNS = labels["crossplane.io/claim-namespace"]
 
 	// Extract standard Crossplane status conditions.
 	xr.Synced = extractConditionStatus(obj.Object, "Synced")

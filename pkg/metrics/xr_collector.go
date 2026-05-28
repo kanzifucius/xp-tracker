@@ -11,29 +11,29 @@ import (
 var (
 	xrTotalDesc = prometheus.NewDesc(
 		"crossplane_xr_total",
-		"Number of Crossplane composite resources (XRs) by group, kind, namespace, composition, name, and status.",
-		[]string{"group", "kind", "namespace", "composition", "name", "synced", "ready"},
+		"Number of Crossplane composite resources (XRs) by group, kind, namespace, name, and status.",
+		[]string{"group", "kind", "namespace", "name", "claim_name", "claim_namespace", "synced", "ready"},
 		nil,
 	)
 
 	xrReadyDesc = prometheus.NewDesc(
 		"crossplane_xr_ready",
-		"Number of Ready Crossplane XRs by group, kind, namespace, composition, name, and status.",
-		[]string{"group", "kind", "namespace", "composition", "name", "synced", "ready"},
+		"Number of Ready Crossplane XRs by group, kind, namespace, name, and status.",
+		[]string{"group", "kind", "namespace", "name", "claim_name", "claim_namespace", "synced", "ready"},
 		nil,
 	)
 
 	xrStatusSyncedDesc = prometheus.NewDesc(
 		"crossplane_xr_status_synced",
 		"Synced status for Crossplane XRs (1=true, 0=false).",
-		[]string{"group", "kind", "namespace", "composition", "name", "synced", "ready"},
+		[]string{"group", "kind", "namespace", "name", "claim_name", "claim_namespace", "synced", "ready"},
 		nil,
 	)
 
 	xrStatusReadyDesc = prometheus.NewDesc(
 		"crossplane_xr_status_ready",
 		"Ready status for Crossplane XRs (1=true, 0=false).",
-		[]string{"group", "kind", "namespace", "composition", "name", "synced", "ready"},
+		[]string{"group", "kind", "namespace", "name", "claim_name", "claim_namespace", "synced", "ready"},
 		nil,
 	)
 )
@@ -43,8 +43,9 @@ type xrAggKey struct {
 	Group       string
 	Kind        string
 	Namespace   string
-	Composition string
 	Name        string
+	ClaimName   string
+	ClaimNS     string
 	Synced      string
 	Ready       string
 }
@@ -84,8 +85,9 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			Group:       xr.Group,
 			Kind:        xr.Kind,
 			Namespace:   xr.Namespace,
-			Composition: xr.Composition,
 			Name:        xr.Name,
+			ClaimName:   xr.ClaimName,
+			ClaimNS:     xr.ClaimNS,
 			Synced:      boolToLabel(xr.Synced),
 			Ready:       boolToLabel(xr.Ready),
 		}
@@ -108,7 +110,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			xrTotalDesc,
 			prometheus.GaugeValue,
 			float64(val.Total),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Name, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Name, key.ClaimName, key.ClaimNS, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create xr_total metric", "error", err)
@@ -120,7 +122,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			xrReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Name, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Name, key.ClaimName, key.ClaimNS, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create xr_ready metric", "error", err)
@@ -132,7 +134,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			xrStatusSyncedDesc,
 			prometheus.GaugeValue,
 			float64(val.SyncedCount),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Name, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Name, key.ClaimName, key.ClaimNS, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create xr_status_synced metric", "error", err)
@@ -144,7 +146,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			xrStatusReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Name, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Name, key.ClaimName, key.ClaimNS, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create xr_status_ready metric", "error", err)

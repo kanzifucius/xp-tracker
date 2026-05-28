@@ -10,10 +10,10 @@ Example PromQL queries for building Grafana dashboards with xp-tracker metrics.
 sum by (namespace)(crossplane_claims_total)
 ```
 
-### Ready claims by composition
+### Ready claims by team
 
 ```promql
-sum by (composition)(crossplane_claims_ready)
+sum by (team)(crossplane_claims_ready)
 ```
 
 ### Claims by creator
@@ -75,10 +75,10 @@ max by (namespace, claim_name, synced, ready)(crossplane_claims_total)
 sum by (kind)(crossplane_xr_total)
 ```
 
-### XR readiness ratio by composition
+### XR readiness ratio by kind
 
 ```promql
-sum by (composition)(crossplane_xr_ready) / sum by (composition)(crossplane_xr_total)
+sum by (kind)(crossplane_xr_ready) / sum by (kind)(crossplane_xr_total)
 ```
 
 ### Not-ready XRs
@@ -102,7 +102,7 @@ sum by (ready)(crossplane_xr_total)
 ### Per-XR status table
 
 ```promql
-max by (name, composition, synced, ready)(crossplane_xr_total)
+max by (name, claim_name, claim_namespace, synced, ready)(crossplane_xr_total)
 ```
 
 ## Combined queries

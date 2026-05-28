@@ -12,29 +12,29 @@ import (
 var (
 	claimTotalDesc = prometheus.NewDesc(
 		"crossplane_claims_total",
-		"Number of Crossplane claims by group, kind, namespace, composition, creator, claim_name, and status.",
-		[]string{"group", "kind", "namespace", "composition", "creator", "team", "claim_name", "synced", "ready"},
+		"Number of Crossplane claims by group, kind, namespace, creator, claim_name, and status.",
+		[]string{"group", "kind", "namespace", "creator", "team", "claim_name", "synced", "ready"},
 		nil,
 	)
 
 	claimReadyDesc = prometheus.NewDesc(
 		"crossplane_claims_ready",
-		"Number of Ready Crossplane claims by group, kind, namespace, composition, creator, claim_name, and status.",
-		[]string{"group", "kind", "namespace", "composition", "creator", "team", "claim_name", "synced", "ready"},
+		"Number of Ready Crossplane claims by group, kind, namespace, creator, claim_name, and status.",
+		[]string{"group", "kind", "namespace", "creator", "team", "claim_name", "synced", "ready"},
 		nil,
 	)
 
 	claimStatusSyncedDesc = prometheus.NewDesc(
 		"crossplane_claims_status_synced",
 		"Synced status for Crossplane claims (1=true, 0=false).",
-		[]string{"group", "kind", "namespace", "composition", "creator", "team", "claim_name", "synced", "ready"},
+		[]string{"group", "kind", "namespace", "creator", "team", "claim_name", "synced", "ready"},
 		nil,
 	)
 
 	claimStatusReadyDesc = prometheus.NewDesc(
 		"crossplane_claims_status_ready",
 		"Ready status for Crossplane claims (1=true, 0=false).",
-		[]string{"group", "kind", "namespace", "composition", "creator", "team", "claim_name", "synced", "ready"},
+		[]string{"group", "kind", "namespace", "creator", "team", "claim_name", "synced", "ready"},
 		nil,
 	)
 )
@@ -44,7 +44,6 @@ type claimAggKey struct {
 	Group       string
 	Kind        string
 	Namespace   string
-	Composition string
 	Creator     string
 	Team        string
 	ClaimName   string
@@ -87,7 +86,6 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			Group:       claim.Group,
 			Kind:        claim.Kind,
 			Namespace:   claim.Namespace,
-			Composition: claim.Composition,
 			Creator:     claim.Creator,
 			Team:        claim.Team,
 			ClaimName:   claim.Name,
@@ -113,7 +111,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			claimTotalDesc,
 			prometheus.GaugeValue,
 			float64(val.Total),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create claim_total metric", "error", err)
@@ -125,7 +123,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			claimReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create claim_ready metric", "error", err)
@@ -137,7 +135,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			claimStatusSyncedDesc,
 			prometheus.GaugeValue,
 			float64(val.SyncedCount),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create claim_status_synced metric", "error", err)
@@ -149,7 +147,7 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 			claimStatusReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
-			key.Group, key.Kind, key.Namespace, key.Composition, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
+			key.Group, key.Kind, key.Namespace, key.Creator, key.Team, key.ClaimName, key.Synced, key.Ready,
 		)
 		if err != nil {
 			slog.Error("failed to create claim_status_ready metric", "error", err)

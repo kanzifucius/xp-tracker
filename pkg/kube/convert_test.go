@@ -177,6 +177,8 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 				"name": "xr-abc-123",
 				"labels": map[string]interface{}{
 					"crossplane.io/composition-name": "production-postgres",
+					"crossplane.io/claim-name":       "dbx-ws-aaip-1-1",
+					"crossplane.io/claim-namespace":  "data-and-ai",
 				},
 			},
 			"status": map[string]interface{}{
@@ -208,6 +210,12 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 	}
 	if xr.Composition != "production-postgres" {
 		t.Errorf("Composition: got %q", xr.Composition)
+	}
+	if xr.ClaimName != "dbx-ws-aaip-1-1" {
+		t.Errorf("ClaimName: got %q", xr.ClaimName)
+	}
+	if xr.ClaimNS != "data-and-ai" {
+		t.Errorf("ClaimNS: got %q", xr.ClaimNS)
 	}
 	if xr.Ready {
 		t.Error("expected Ready=false")

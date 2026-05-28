@@ -31,6 +31,8 @@ type XRInfo struct {
 	Kind        string    `json:"kind"`
 	Namespace   string    `json:"namespace"` // usually empty for cluster-scoped XRs
 	Name        string    `json:"name"`
+	ClaimName   string    `json:"claimName"`
+	ClaimNS     string    `json:"claimNamespace"`
 	Composition string    `json:"composition"`
 	Synced      bool      `json:"synced"`
 	Ready       bool      `json:"ready"`
