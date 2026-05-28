@@ -40,14 +40,14 @@ var (
 
 // xrAggKey is the label tuple used to aggregate XR metrics.
 type xrAggKey struct {
-	Group       string
-	Kind        string
-	Namespace   string
-	Name        string
-	ClaimName   string
-	ClaimNS     string
-	Synced      string
-	Ready       string
+	Group     string
+	Kind      string
+	Namespace string
+	Name      string
+	ClaimName string
+	ClaimNS   string
+	Synced    string
+	Ready     string
 }
 
 // xrAggVal holds aggregated counts for an XR label tuple.
@@ -82,14 +82,14 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 	agg := make(map[xrAggKey]*xrAggVal)
 	for _, xr := range xrs {
 		key := xrAggKey{
-			Group:       xr.Group,
-			Kind:        xr.Kind,
-			Namespace:   xr.Namespace,
-			Name:        xr.Name,
-			ClaimName:   xr.ClaimName,
-			ClaimNS:     xr.ClaimNS,
-			Synced:      boolToLabel(xr.Synced),
-			Ready:       boolToLabel(xr.Ready),
+			Group:     xr.Group,
+			Kind:      xr.Kind,
+			Namespace: xr.Namespace,
+			Name:      xr.Name,
+			ClaimName: xr.ClaimName,
+			ClaimNS:   xr.ClaimNS,
+			Synced:    boolToLabel(xr.Synced),
+			Ready:     boolToLabel(xr.Ready),
 		}
 		v, ok := agg[key]
 		if !ok {

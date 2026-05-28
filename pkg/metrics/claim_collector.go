@@ -41,14 +41,14 @@ var (
 
 // claimAggKey is the label tuple used to aggregate claim metrics.
 type claimAggKey struct {
-	Group       string
-	Kind        string
-	Namespace   string
-	Creator     string
-	Team        string
-	ClaimName   string
-	Synced      string
-	Ready       string
+	Group     string
+	Kind      string
+	Namespace string
+	Creator   string
+	Team      string
+	ClaimName string
+	Synced    string
+	Ready     string
 }
 
 // claimAggVal holds aggregated counts for a claim label tuple.
@@ -83,14 +83,14 @@ func (c *ClaimCollector) Collect(ch chan<- prometheus.Metric) {
 	agg := make(map[claimAggKey]*claimAggVal)
 	for _, claim := range claims {
 		key := claimAggKey{
-			Group:       claim.Group,
-			Kind:        claim.Kind,
-			Namespace:   claim.Namespace,
-			Creator:     claim.Creator,
-			Team:        claim.Team,
-			ClaimName:   claim.Name,
-			Synced:      boolToLabel(claim.Synced),
-			Ready:       boolToLabel(claim.Ready),
+			Group:     claim.Group,
+			Kind:      claim.Kind,
+			Namespace: claim.Namespace,
+			Creator:   claim.Creator,
+			Team:      claim.Team,
+			ClaimName: claim.Name,
+			Synced:    boolToLabel(claim.Synced),
+			Ready:     boolToLabel(claim.Ready),
 		}
 		v, ok := agg[key]
 		if !ok {
