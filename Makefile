@@ -9,6 +9,7 @@
         kindplane-up kindplane-down kindplane-status dev dev-down \
         logs \
         docs-serve \
+        release-tag release-latest \
         help
 
 BINARY    := xp-tracker
@@ -19,6 +20,7 @@ PLATFORMS ?= linux/amd64,linux/arm64
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT    ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+RELEASE_LIMIT ?= 10
 
 LDFLAGS   := -s -w \
              -X main.version=$(VERSION) \
@@ -174,6 +176,46 @@ DOCS_PORT ?= 8000
 
 docs-serve: ## Serve MkDocs site locally via container (http://localhost:8000)
 	docker run --rm -it -p $(DOCS_PORT):8000 -v $(CURDIR):/docs squidfunk/mkdocs-material
+
+# --- Release ---
+
+release-tag: ## Create and push a semver tag from origin/main HEAD (VERSION=vX.Y.Z)
+	@set -eu; \
+	if [ -z "$(filter VERSION=%,$(MAKEOVERRIDES))" ]; then \
+		echo "VERSION is required (example: make release-tag VERSION=v1.2.3)"; \
+		exit 1; \
+	fi; \
+	if ! printf '%s\n' "$(VERSION)" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$$'; then \
+		echo "VERSION must match semver with v prefix (example: v1.2.3, v1.2.3-rc.1)"; \
+		exit 1; \
+	fi; \
+	git fetch origin main --tags; \
+	main_sha="$$(git rev-parse origin/main)"; \
+	if git rev-parse --verify --quiet "refs/tags/$(VERSION)" >/dev/null; then \
+		echo "Tag $(VERSION) already exists locally"; \
+		exit 1; \
+	fi; \
+	if git ls-remote --tags --refs origin "$(VERSION)" | grep -q .; then \
+		echo "Tag $(VERSION) already exists on origin"; \
+		exit 1; \
+	fi; \
+	git tag -a "$(VERSION)" "$$main_sha" -m "Release $(VERSION)"; \
+	git push origin "$(VERSION)"; \
+	echo "Created and pushed $(VERSION) at origin/main ($$main_sha)"
+
+release-latest: ## Show latest releases (GitHub releases via gh, else semver-sorted tags)
+	@set -eu; \
+	if command -v gh >/dev/null 2>&1 && gh release list --limit $(RELEASE_LIMIT); then \
+		:; \
+	else \
+		if command -v gh >/dev/null 2>&1; then \
+			echo "gh release list unavailable; showing semver-sorted tags from origin"; \
+		else \
+			echo "gh not found; showing semver-sorted tags from origin"; \
+		fi; \
+		git fetch origin --tags >/dev/null; \
+		git tag -l "v*" --sort=-version:refname | head -n "$(RELEASE_LIMIT)"; \
+	fi
 
 # --- Help ---
 

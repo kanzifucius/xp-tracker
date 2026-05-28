@@ -14,7 +14,8 @@ rules:
   # any Crossplane provider, but it violates the principle of least privilege.
   #
   # BEFORE deploying to production you MUST scope the rules to only the API
-  # groups and resources that match your CLAIM_GVRS and XR_GVRS configuration.
+  # groups and resources that match your discovered claim/XR types plus
+  # compositeresourcedefinitions.apiextensions.crossplane.io for discovery.
   # See deploy/overlays/example/ for a properly-scoped ClusterRole patch.
   #
   # Example scoped rule:

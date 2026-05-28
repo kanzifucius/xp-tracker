@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	"github.com/kanzifucius/xp-tracker/pkg/config"
 	"github.com/kanzifucius/xp-tracker/pkg/kube"
@@ -49,6 +50,19 @@ func run() error {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 
+	// Set up context with signal-based cancellation.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	// Create Kubernetes dynamic client.
+	client, err := kube.NewDynamicClient()
+	if err != nil {
+		return fmt.Errorf("create Kubernetes client: %w", err)
+	}
+	if err := discoverAndApplyGVRs(ctx, client, cfg); err != nil {
+		return err
+	}
+
 	slog.Info("configuration loaded",
 		"claim_gvrs", formatGVRs(cfg.ClaimGVRs),
 		"xr_gvrs", formatGVRs(cfg.XRGVRs),
@@ -61,19 +75,9 @@ func run() error {
 		"store_backend", cfg.StoreBackend,
 	)
 
-	// Create Kubernetes dynamic client.
-	client, err := kube.NewDynamicClient()
-	if err != nil {
-		return fmt.Errorf("create Kubernetes client: %w", err)
-	}
-
 	// Initialise the store based on STORE_BACKEND.
 	mem := store.New()
 	var s store.Store = mem
-
-	// Set up context with signal-based cancellation.
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	if cfg.StoreBackend == "s3" {
 		s3Client, err := store.NewS3Client(ctx, cfg.S3Region, cfg.S3Endpoint)
@@ -134,4 +138,20 @@ func formatGVRs(gvrs []schema.GroupVersionResource) []string {
 		out[i] = gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
 	}
 	return out
+}
+
+func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *config.Config) error {
+	claimGVRs, xrGVRs, err := kube.DiscoverFromXRD(ctx, client)
+	if err != nil {
+		return fmt.Errorf("discover claim and XR GVRs from XRDs: %w", err)
+	}
+	if len(claimGVRs) == 0 {
+		return fmt.Errorf("no claim GVRs discovered from XRDs; ensure claim-enabled XRDs exist in the cluster")
+	}
+	if len(xrGVRs) == 0 {
+		return fmt.Errorf("no XR GVRs discovered from XRDs; ensure Crossplane XRDs exist in the cluster")
+	}
+	cfg.ClaimGVRs = claimGVRs
+	cfg.XRGVRs = xrGVRs
+	return nil
 }

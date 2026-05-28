@@ -71,27 +71,25 @@ func Load() (*Config, error) {
 		MetricsAddr:         defaultMetricsAddr,
 	}
 
-	// Required: CLAIM_GVRS
+	// Optional: CLAIM_GVRS (deprecated in favour of XRD discovery)
 	claimRaw := os.Getenv("CLAIM_GVRS")
-	if claimRaw == "" {
-		return nil, fmt.Errorf("CLAIM_GVRS is required")
+	if claimRaw != "" {
+		claimGVRs, err := ParseGVRs(claimRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CLAIM_GVRS: %w", err)
+		}
+		cfg.ClaimGVRs = claimGVRs
 	}
-	claimGVRs, err := ParseGVRs(claimRaw)
-	if err != nil {
-		return nil, fmt.Errorf("invalid CLAIM_GVRS: %w", err)
-	}
-	cfg.ClaimGVRs = claimGVRs
 
-	// Required: XR_GVRS
+	// Optional: XR_GVRS (deprecated in favour of XRD discovery)
 	xrRaw := os.Getenv("XR_GVRS")
-	if xrRaw == "" {
-		return nil, fmt.Errorf("XR_GVRS is required")
+	if xrRaw != "" {
+		xrGVRs, err := ParseGVRs(xrRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid XR_GVRS: %w", err)
+		}
+		cfg.XRGVRs = xrGVRs
 	}
-	xrGVRs, err := ParseGVRs(xrRaw)
-	if err != nil {
-		return nil, fmt.Errorf("invalid XR_GVRS: %w", err)
-	}
-	cfg.XRGVRs = xrGVRs
 
 	// Optional: KUBE_NAMESPACE_SCOPE
 	if ns := os.Getenv("KUBE_NAMESPACE_SCOPE"); ns != "" {

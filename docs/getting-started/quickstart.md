@@ -28,8 +28,9 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       data:
-        CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
-        XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
+        # Optional static overrides (deprecated):
+        # CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
+        # XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
         CREATOR_ANNOTATION_KEY: "myorg.io/created-by"
         TEAM_ANNOTATION_KEY: "myorg.io/team"
 

@@ -6,8 +6,8 @@ All xp-tracker configuration is via environment variables. There are no config f
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `CLAIM_GVRS` | Yes | -- | Comma-separated claim GVRs in `group/version/resource` format |
-| `XR_GVRS` | Yes | -- | Comma-separated XR GVRs in `group/version/resource` format |
+| `CLAIM_GVRS` | No (deprecated) | `""` | Optional static claim GVR override in `group/version/resource` format |
+| `XR_GVRS` | No (deprecated) | `""` | Optional static XR GVR override in `group/version/resource` format |
 | `KUBE_NAMESPACE_SCOPE` | No | `""` (all) | Comma-separated namespace filter |
 | `CREATOR_ANNOTATION_KEY` | No | `""` | Annotation key for claim creator attribution |
 | `TEAM_ANNOTATION_KEY` | No | `""` | Annotation key for team attribution |
@@ -20,7 +20,18 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `S3_REGION` | No | `us-east-1` | AWS region for S3 client |
 | `S3_ENDPOINT` | No | `""` | Custom S3 endpoint (MinIO, LocalStack) |
 
-## GVR format
+## XRD discovery
+
+xp-tracker now discovers claim and XR GVRs from Crossplane `CompositeResourceDefinition` (XRD) objects at startup. The exporter derives:
+
+1. XR GVR from `spec.group` + selected `spec.versions[].name` + `spec.names.plural`
+2. Claim GVR from `spec.group` + selected `spec.versions[].name` + `spec.claimNames.plural` (when present)
+
+Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
+
+If no XRD-backed claim or XR resources can be discovered, startup fails with a clear error.
+
+## Static GVR override format (deprecated)
 
 Each GVR must be specified in `group/version/resource` format. The resource name is the **plural lowercase** form (the same string you'd use with `kubectl get`).
 
@@ -29,8 +40,8 @@ CLAIM_GVRS="platform.example.org/v1alpha1/postgresqlinstances,platform.example.o
 XR_GVRS="platform.example.org/v1alpha1/xpostgresqlinstances,platform.example.org/v1alpha1/xkafkatopics"
 ```
 
-!!! tip "Finding your GVRs"
-    Use `kubectl api-resources` to find the correct group, version, and resource name for your Crossplane types:
+!!! tip "Finding your GVRs for override mode"
+    Use `kubectl api-resources` to find the correct group, version, and resource name:
 
     ```bash
     kubectl api-resources | grep platform.example.org
@@ -77,8 +88,9 @@ kind: ConfigMap
 metadata:
   name: crossplane-metrics-exporter
 data:
-  CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances"
-  XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances"
+  # Optional overrides (deprecated when discovery is enabled):
+  # CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances"
+  # XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances"
   CREATOR_ANNOTATION_KEY: "platform.example.org/created-by"
   TEAM_ANNOTATION_KEY: "platform.example.org/team"
   POLL_INTERVAL_SECONDS: "30"
