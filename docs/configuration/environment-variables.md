@@ -78,6 +78,11 @@ Claims get their composition value through a two-step enrichment:
 1. The claim's `spec.resourceRef.name` identifies the backing XR
 2. The XR's composition label value is copied to the claim
 
+XRs get their claim linkage through a symmetric enrichment when labels are missing:
+
+1. The XR's `crossplane.io/claim-name` and `crossplane.io/claim-namespace` labels are used when present
+2. Otherwise, xp-tracker finds the claim whose `spec.resourceRef.name` matches the XR name and copies the claim's name and namespace
+
 ## Deployment via ConfigMap
 
 In the Kustomize manifests, environment variables are stored in a ConfigMap and injected via `envFrom`:

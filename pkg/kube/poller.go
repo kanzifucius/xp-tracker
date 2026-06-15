@@ -72,8 +72,9 @@ func (p *Poller) poll(ctx context.Context) {
 		}
 	}
 
-	// Enrich claims with composition data from XRs.
+	// Enrich claims with composition data from XRs, and XRs with claim data from claims.
 	p.store.EnrichClaimCompositions()
+	p.store.EnrichXRClaims()
 
 	// Only persist if the entire cycle succeeded. Persisting a partial
 	// snapshot could overwrite a valid one with incomplete data.

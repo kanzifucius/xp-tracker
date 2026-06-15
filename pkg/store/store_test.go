@@ -157,6 +157,47 @@ func TestEnrichClaimCompositions(t *testing.T) {
 	}
 }
 
+func TestEnrichXRClaims(t *testing.T) {
+	s := New()
+
+	s.ReplaceXRs("g1/v1/xpostgres", []XRInfo{
+		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-abc"},
+		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-def", ClaimName: "label-claim", ClaimNS: "label-ns"},
+		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-orphan"},
+	})
+
+	s.ReplaceClaims("g1/v1/postgres", []ClaimInfo{
+		{GVR: "g1/v1/postgres", Group: "g1", Kind: "PostgreSQL", Namespace: "ns1", Name: "db1", XRRef: "xr-abc"},
+		{GVR: "g1/v1/postgres", Group: "g1", Kind: "PostgreSQL", Namespace: "ns2", Name: "db2", XRRef: "xr-def"},
+		{GVR: "g1/v1/postgres", Group: "g1", Kind: "PostgreSQL", Namespace: "ns1", Name: "db3", XRRef: ""},
+		{GVR: "g1/v1/postgres", Group: "g1", Kind: "PostgreSQL", Namespace: "ns1", Name: "db4", XRRef: "xr-missing"},
+	})
+
+	s.EnrichXRClaims()
+
+	snap := s.SnapshotXRs()
+	byName := make(map[string]XRInfo)
+	for _, x := range snap {
+		byName[x.Name] = x
+	}
+
+	if byName["xr-abc"].ClaimName != "db1" {
+		t.Errorf("xr-abc: expected claim name db1, got %q", byName["xr-abc"].ClaimName)
+	}
+	if byName["xr-abc"].ClaimNS != "ns1" {
+		t.Errorf("xr-abc: expected claim namespace ns1, got %q", byName["xr-abc"].ClaimNS)
+	}
+	if byName["xr-def"].ClaimName != "label-claim" {
+		t.Errorf("xr-def: expected label-derived claim name preserved, got %q", byName["xr-def"].ClaimName)
+	}
+	if byName["xr-def"].ClaimNS != "label-ns" {
+		t.Errorf("xr-def: expected label-derived claim namespace preserved, got %q", byName["xr-def"].ClaimNS)
+	}
+	if byName["xr-orphan"].ClaimName != "" {
+		t.Errorf("xr-orphan: expected empty claim name, got %q", byName["xr-orphan"].ClaimName)
+	}
+}
+
 func TestSnapshotClaims_IsCopy(t *testing.T) {
 	s := New()
 	s.ReplaceClaims("g1/v1/k1s", []ClaimInfo{

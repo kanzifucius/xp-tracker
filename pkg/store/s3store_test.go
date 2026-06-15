@@ -166,7 +166,15 @@ func TestS3Store_DelegatesAllMethods(t *testing.T) {
 		t.Errorf("EnrichClaimCompositions via delegation failed: got composition %q", claims[0].Composition)
 	}
 
+	// EnrichXRClaims should work through delegation.
+	ss.EnrichXRClaims()
 	xrs := ss.SnapshotXRs()
+	if xrs[0].ClaimName != "a" {
+		t.Errorf("EnrichXRClaims via delegation failed: got claim name %q", xrs[0].ClaimName)
+	}
+	if xrs[0].ClaimNS != "ns" {
+		t.Errorf("EnrichXRClaims via delegation failed: got claim namespace %q", xrs[0].ClaimNS)
+	}
 	if xrs[0].Kind != "XK" {
 		t.Errorf("SnapshotXRs delegation failed: got kind %q", xrs[0].Kind)
 	}

@@ -43,8 +43,8 @@ Total number of Crossplane composite resources (XRs), broken down by label tuple
 | `kind` | Resource kind (e.g. `XPostgreSQLInstance`) |
 | `namespace` | Kubernetes namespace (usually empty for cluster-scoped XRs) |
 | `name` | XR metadata name |
-| `claim_name` | Claim name linked to the XR (`crossplane.io/claim-name`) |
-| `claim_namespace` | Claim namespace linked to the XR (`crossplane.io/claim-namespace`) |
+| `claim_name` | Claim name linked to the XR (`crossplane.io/claim-name`, or backfilled from the claim's `spec.resourceRef.name`) |
+| `claim_namespace` | Claim namespace linked to the XR (`crossplane.io/claim-namespace`, or backfilled from the matching claim) |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |
 
@@ -115,6 +115,7 @@ This means cardinality is closely tied to the number of claims, with additional 
 ## Label notes
 
 - **Empty labels**: if an annotation key is not configured or the annotation is not present on a resource, the label value is an empty string (`""`).
+- **XR claim linkage**: `claim_name` and `claim_namespace` on XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name.
 - **Composition enrichment**: composition is still available on the `/bookkeeping` payload, even though it is no longer a Prometheus label dimension.
 - **Namespace for XRs**: composite resources are typically cluster-scoped, so the `namespace` label is usually empty.
 

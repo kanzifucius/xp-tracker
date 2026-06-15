@@ -46,6 +46,7 @@ type Store interface {
 	ReplaceClaims(gvr string, items []ClaimInfo)
 	ReplaceXRs(gvr string, items []XRInfo)
 	EnrichClaimCompositions()
+	EnrichXRClaims()
 	SnapshotClaims() []ClaimInfo
 	SnapshotXRs() []XRInfo
 	ClaimCount() int
@@ -131,6 +132,30 @@ func (s *MemoryStore) ReplaceXRs(gvr string, items []XRInfo) {
 		}
 		if _, ok := newKeys[key]; !ok {
 			delete(s.xrs, key)
+		}
+	}
+}
+
+// EnrichXRClaims looks up each XR without claim labels in the claim store and
+// copies ClaimName and ClaimNS from the claim whose spec.resourceRef.name
+// matches the XR name. Label-derived values are not overwritten. Must be
+// called after both claims and XRs have been replaced for the current polling
+// cycle. If multiple claims reference the same XR, the first match wins.
+func (s *MemoryStore) EnrichXRClaims() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, xr := range s.xrs {
+		if xr.ClaimName != "" {
+			continue
+		}
+		for _, claim := range s.claims {
+			if claim.XRRef == xr.Name {
+				xr.ClaimName = claim.Name
+				xr.ClaimNS = claim.Namespace
+				s.xrs[key] = xr
+				break
+			}
 		}
 	}
 }
