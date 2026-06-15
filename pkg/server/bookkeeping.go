@@ -35,10 +35,27 @@ type XRDTO struct {
 	AgeSeconds  int64  `json:"ageSeconds"`
 }
 
+// MRDTO is the JSON representation of a single Crossplane provider managed resource.
+type MRDTO struct {
+	Group          string `json:"group"`
+	Kind           string `json:"kind"`
+	Namespace      string `json:"namespace"`
+	Name           string `json:"name"`
+	XRName         string `json:"xrName"`
+	ClaimName      string `json:"claimName"`
+	ClaimNamespace string `json:"claimNamespace"`
+	Provider       string `json:"provider"`
+	ProviderConfig string `json:"providerConfig"`
+	Ready          bool   `json:"ready"`
+	Reason         string `json:"reason"`
+	AgeSeconds     int64  `json:"ageSeconds"`
+}
+
 // BookkeepingResponse is the top-level JSON response for the /bookkeeping endpoint.
 type BookkeepingResponse struct {
 	Claims      []ClaimDTO `json:"claims"`
 	XRs         []XRDTO    `json:"xrs"`
+	MRs         []MRDTO    `json:"mrs"`
 	GeneratedAt string     `json:"generatedAt"`
 }
 
@@ -49,6 +66,7 @@ func bookkeepingHandler(s store.Store) http.HandlerFunc {
 
 		claims := s.SnapshotClaims()
 		xrs := s.SnapshotXRs()
+		mrs := s.SnapshotMRs()
 
 		claimDTOs := make([]ClaimDTO, 0, len(claims))
 		for _, c := range claims {
@@ -82,9 +100,29 @@ func bookkeepingHandler(s store.Store) http.HandlerFunc {
 			})
 		}
 
+		mrDTOs := make([]MRDTO, 0, len(mrs))
+		for _, m := range mrs {
+			age := int64(now.Sub(m.CreatedAt).Seconds())
+			mrDTOs = append(mrDTOs, MRDTO{
+				Group:          m.Group,
+				Kind:           m.Kind,
+				Namespace:      m.Namespace,
+				Name:           m.Name,
+				XRName:         m.XRName,
+				ClaimName:      m.ClaimName,
+				ClaimNamespace: m.ClaimNS,
+				Provider:       m.Provider,
+				ProviderConfig: m.ProviderConfig,
+				Ready:          m.Ready,
+				Reason:         m.Reason,
+				AgeSeconds:     age,
+			})
+		}
+
 		resp := BookkeepingResponse{
 			Claims:      claimDTOs,
 			XRs:         xrDTOs,
+			MRs:         mrDTOs,
 			GeneratedAt: now.Format(time.RFC3339),
 		}
 

@@ -109,3 +109,68 @@ func TestDiscoverFromXRD_ErrorsOnInvalidXRD(t *testing.T) {
 		t.Fatal("expected discovery error for XRD without referenceable/served versions")
 	}
 }
+
+func TestDiscoverMRGVRsFromCRDs(t *testing.T) {
+	providerCRD := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "nopresources.nop.crossplane.io",
+				"labels": map[string]interface{}{
+					"pkg.crossplane.io/provider": "provider-nop",
+				},
+			},
+			"spec": map[string]interface{}{
+				"group": "nop.crossplane.io",
+				"names": map[string]interface{}{
+					"plural": "nopresources",
+				},
+				"versions": []interface{}{
+					map[string]interface{}{"name": "v1alpha1", "served": true, "storage": true},
+				},
+			},
+		},
+	}
+	nonProviderCRD := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "widgets.samples.xptracker.dev",
+			},
+			"spec": map[string]interface{}{
+				"group": "samples.xptracker.dev",
+				"names": map[string]interface{}{
+					"plural": "widgets",
+				},
+				"versions": []interface{}{
+					map[string]interface{}{"name": "v1alpha1", "served": true, "storage": true},
+				},
+			},
+		},
+	}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			crdGVR: "CustomResourceDefinitionList",
+		},
+		providerCRD, nonProviderCRD,
+	)
+
+	gvrs, providers, err := DiscoverMRGVRsFromCRDs(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverMRGVRsFromCRDs error: %v", err)
+	}
+	if len(gvrs) != 1 {
+		t.Fatalf("expected 1 MR GVR, got %d", len(gvrs))
+	}
+	if gvrs[0].Group != "nop.crossplane.io" || gvrs[0].Version != "v1alpha1" || gvrs[0].Resource != "nopresources" {
+		t.Fatalf("unexpected GVR: %+v", gvrs[0])
+	}
+	key := gvrKey(gvrs[0])
+	if providers[key] != "provider-nop" {
+		t.Fatalf("expected provider-nop, got %q", providers[key])
+	}
+}

@@ -40,6 +40,22 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
       "ageSeconds": 12300
     }
   ],
+  "mrs": [
+    {
+      "group": "nop.crossplane.io",
+      "kind": "NopResource",
+      "namespace": "default",
+      "name": "nop-abc",
+      "xrName": "xwidget-a",
+      "claimName": "widget-a",
+      "claimNamespace": "team-alpha",
+      "provider": "provider-nop",
+      "providerConfig": "default",
+      "ready": true,
+      "reason": "Available",
+      "ageSeconds": 1200
+    }
+  ],
   "generatedAt": "2026-02-13T20:50:00Z"
 }
 ```
@@ -74,6 +90,23 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
 | `reason` | string | Ready condition reason |
 | `ageSeconds` | integer | Seconds since `metadata.creationTimestamp` |
 
+### MR fields
+
+| Field | Type | Description |
+|---|---|---|
+| `group` | string | API group from the GVR |
+| `kind` | string | Resource kind |
+| `namespace` | string | Kubernetes namespace |
+| `name` | string | Resource name |
+| `xrName` | string | Composite (XR) name from the composite label |
+| `claimName` | string | Claim name (from MR labels or XR enrichment) |
+| `claimNamespace` | string | Claim namespace |
+| `provider` | string | Provider package name from CRD discovery |
+| `providerConfig` | string | `spec.providerConfigRef.name` |
+| `ready` | boolean | Whether the Ready condition is True |
+| `reason` | string | Ready condition reason |
+| `ageSeconds` | integer | Seconds since `metadata.creationTimestamp` |
+
 ### Top-level fields
 
 | Field | Type | Description |
@@ -94,6 +127,9 @@ curl -s localhost:8080/bookkeeping | jq '[.claims[] | select(.ready == false)]'
 
 # Get all XR compositions
 curl -s localhost:8080/bookkeeping | jq '[.xrs[].composition] | unique'
+
+# List MRs for a claim
+curl -s localhost:8080/bookkeeping | jq '[.mrs[] | select(.claimName == "widget-a")]'
 ```
 
 ## Notes

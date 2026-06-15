@@ -324,3 +324,84 @@ func TestPoller_StaleRemoval(t *testing.T) {
 		t.Fatalf("expected 0 claims after deletion, got %d", s.ClaimCount())
 	}
 }
+
+func TestPoller_PollMRs(t *testing.T) {
+	claimGVR := schema.GroupVersionResource{Group: "g", Version: "v1", Resource: "things"}
+	xrGVR := schema.GroupVersionResource{Group: "g", Version: "v1", Resource: "xthings"}
+	mrGVR := schema.GroupVersionResource{Group: "nop.crossplane.io", Version: "v1alpha1", Resource: "nopresources"}
+
+	mrLinked := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "nop.crossplane.io/v1alpha1",
+			"kind":       "NopResource",
+			"metadata": map[string]interface{}{
+				"name":      "nop-1",
+				"namespace": "default",
+				"labels": map[string]interface{}{
+					"crossplane.io/composite": "xr-1",
+				},
+			},
+			"spec": map[string]interface{}{
+				"providerConfigRef": map[string]interface{}{"name": "default"},
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{"type": "Ready", "status": "True", "reason": "Available"},
+				},
+			},
+		},
+	}
+
+	xr := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "g/v1",
+			"kind":       "XThing",
+			"metadata": map[string]interface{}{
+				"name": "xr-1",
+				"labels": map[string]interface{}{
+					"crossplane.io/claim-name":      "thing-1",
+					"crossplane.io/claim-namespace": "default",
+				},
+			},
+		},
+	}
+
+	client := newFakeClient(
+		map[schema.GroupVersionResource]string{
+			claimGVR: "ThingList",
+			xrGVR:    "XThingList",
+			mrGVR:    "NopResourceList",
+		},
+		mrLinked, xr,
+	)
+
+	gvrKey := "nop.crossplane.io/v1alpha1/nopresources"
+	cfg := &config.Config{
+		ClaimGVRs:           []schema.GroupVersionResource{claimGVR},
+		XRGVRs:              []schema.GroupVersionResource{xrGVR},
+		MRGVRs:              []schema.GroupVersionResource{mrGVR},
+		MRProviderNames:     map[string]string{gvrKey: "provider-nop"},
+		CompositionLabelKey: "crossplane.io/composition-name",
+		CompositeLabelKey:   "crossplane.io/composite",
+		PollIntervalSeconds: 30,
+	}
+
+	s := store.New()
+	poller := NewPoller(client, cfg, s)
+	poller.poll(context.Background())
+
+	if s.MRCount() != 1 {
+		t.Fatalf("expected 1 MR, got %d", s.MRCount())
+	}
+
+	mrs := s.SnapshotMRs()
+	if mrs[0].XRName != "xr-1" {
+		t.Errorf("XRName: got %q", mrs[0].XRName)
+	}
+	if mrs[0].ClaimName != "thing-1" {
+		t.Errorf("ClaimName: got %q, want thing-1", mrs[0].ClaimName)
+	}
+	if mrs[0].Provider != "provider-nop" {
+		t.Errorf("Provider: got %q", mrs[0].Provider)
+	}
+}

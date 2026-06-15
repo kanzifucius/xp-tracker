@@ -24,6 +24,7 @@ func TestRegisterSelfMetrics(t *testing.T) {
 		"xp_tracker_poll_errors_total":           false,
 		"xp_tracker_store_claims":                false,
 		"xp_tracker_store_xrs":                   false,
+		"xp_tracker_store_mrs":                   false,
 		"xp_tracker_s3_persist_duration_seconds": false,
 	}
 

@@ -254,6 +254,73 @@ func TestUnstructuredToXR_NoConditions(t *testing.T) {
 	}
 }
 
+func TestUnstructuredToMR_Full(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "nop.crossplane.io", Version: "v1alpha1", Resource: "nopresources"}
+	cfg := &config.Config{
+		CompositeLabelKey: "crossplane.io/composite",
+	}
+
+	now := time.Now().Truncate(time.Second)
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "nop.crossplane.io/v1alpha1",
+			"kind":       "NopResource",
+			"metadata": map[string]interface{}{
+				"name":              "nop-abc",
+				"namespace":         "default",
+				"creationTimestamp": now.Format(time.RFC3339),
+				"labels": map[string]interface{}{
+					"crossplane.io/composite":       "xr-widget-1",
+					"crossplane.io/claim-name":      "widget-a",
+					"crossplane.io/claim-namespace": "team-alpha",
+				},
+			},
+			"spec": map[string]interface{}{
+				"providerConfigRef": map[string]interface{}{
+					"name": "default",
+				},
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{"type": "Synced", "status": "True"},
+					map[string]interface{}{"type": "Ready", "status": "True", "reason": "Available"},
+				},
+			},
+		},
+	}
+	obj.SetCreationTimestamp(metav1.NewTime(now))
+
+	mr := UnstructuredToMR(*obj, gvr, cfg, "provider-nop")
+
+	if mr.GVR != "nop.crossplane.io/v1alpha1/nopresources" {
+		t.Errorf("GVR: got %q", mr.GVR)
+	}
+	if mr.Kind != "NopResource" {
+		t.Errorf("Kind: got %q", mr.Kind)
+	}
+	if mr.XRName != "xr-widget-1" {
+		t.Errorf("XRName: got %q", mr.XRName)
+	}
+	if mr.ClaimName != "widget-a" {
+		t.Errorf("ClaimName: got %q", mr.ClaimName)
+	}
+	if mr.ClaimNS != "team-alpha" {
+		t.Errorf("ClaimNS: got %q", mr.ClaimNS)
+	}
+	if mr.Provider != "provider-nop" {
+		t.Errorf("Provider: got %q", mr.Provider)
+	}
+	if mr.ProviderConfig != "default" {
+		t.Errorf("ProviderConfig: got %q", mr.ProviderConfig)
+	}
+	if !mr.Ready || !mr.Synced {
+		t.Error("expected Ready and Synced true")
+	}
+	if mr.Reason != "Available" {
+		t.Errorf("Reason: got %q", mr.Reason)
+	}
+}
+
 func TestExtractReadyCondition_MultipleConditions(t *testing.T) {
 	obj := map[string]interface{}{
 		"status": map[string]interface{}{

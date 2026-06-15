@@ -72,9 +72,18 @@ func (p *Poller) poll(ctx context.Context) {
 		}
 	}
 
-	// Enrich claims with composition data from XRs, and XRs with claim data from claims.
+	for _, gvr := range p.cfg.MRGVRs {
+		if err := p.pollMRs(ctx, gvr); err != nil {
+			hadErrors = true
+			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
+		}
+	}
+
+	// Enrich claims with composition data from XRs, XRs with claim data from claims,
+	// and MRs with claim data from XRs.
 	p.store.EnrichClaimCompositions()
 	p.store.EnrichXRClaims()
+	p.store.EnrichMRClaims()
 
 	// Only persist if the entire cycle succeeded. Persisting a partial
 	// snapshot could overwrite a valid one with incomplete data.
@@ -92,13 +101,16 @@ func (p *Poller) poll(ctx context.Context) {
 	// Update self-monitoring gauges.
 	claimCount := p.store.ClaimCount()
 	xrCount := p.store.XRCount()
+	mrCount := p.store.MRCount()
 	metrics.StoreClaims.Set(float64(claimCount))
 	metrics.StoreXRs.Set(float64(xrCount))
+	metrics.StoreMRs.Set(float64(mrCount))
 	metrics.PollDuration.Observe(time.Since(start).Seconds())
 
 	slog.Info("polling cycle complete",
 		"claims", claimCount,
 		"xrs", xrCount,
+		"mrs", mrCount,
 	)
 }
 
@@ -177,6 +189,85 @@ func (p *Poller) pollXRs(ctx context.Context, gvr schema.GroupVersionResource) e
 	p.store.ReplaceXRs(gvrStr, allXRs)
 	slog.Debug("XRs updated", "gvr", gvrStr, "count", len(allXRs))
 	return nil
+}
+
+// pollMRs lists claim-linked MRs for a given GVR and updates the store.
+func (p *Poller) pollMRs(ctx context.Context, gvr schema.GroupVersionResource) error {
+	gvrStr := GVRString(gvr)
+	provider := p.cfg.MRProviderNames[gvrStr]
+
+	namespaces := p.cfg.Namespaces
+	var allMRs []store.MRInfo
+
+	if len(namespaces) == 0 {
+		mrs, err := p.listMRs(ctx, gvr, "", provider)
+		if err != nil {
+			slog.Error("failed to list MRs", "gvr", gvrStr, "error", err)
+			return err
+		}
+		allMRs = mrs
+	} else {
+		var errs []error
+		for _, ns := range namespaces {
+			mrs, err := p.listMRs(ctx, gvr, ns, provider)
+			if err != nil {
+				slog.Error("failed to list MRs", "gvr", gvrStr, "namespace", ns, "error", err)
+				errs = append(errs, err)
+				continue
+			}
+			allMRs = append(allMRs, mrs...)
+		}
+		if len(errs) > 0 {
+			p.store.ReplaceMRs(gvrStr, allMRs)
+			slog.Debug("MRs partially updated", "gvr", gvrStr, "count", len(allMRs))
+			return errs[0]
+		}
+	}
+
+	p.store.ReplaceMRs(gvrStr, allMRs)
+	slog.Debug("MRs updated", "gvr", gvrStr, "count", len(allMRs))
+	return nil
+}
+
+// listMRs lists MRs for a specific GVR and optional namespace.
+// Only resources with the composite label (claim chain) are returned.
+func (p *Poller) listMRs(ctx context.Context, gvr schema.GroupVersionResource, namespace, provider string) ([]store.MRInfo, error) {
+	var ri dynamic.ResourceInterface
+	if namespace == "" {
+		ri = p.client.Resource(gvr)
+	} else {
+		ri = p.client.Resource(gvr).Namespace(namespace)
+	}
+
+	labelSelector := p.cfg.CompositeLabelKey
+
+	var mrs []store.MRInfo
+	var continueToken string
+	for {
+		opts := metav1.ListOptions{
+			Limit:         500,
+			Continue:      continueToken,
+			LabelSelector: labelSelector,
+		}
+		list, err := ri.List(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, item := range list.Items {
+			mr := UnstructuredToMR(item, gvr, p.cfg, provider)
+			if mr.XRName == "" {
+				continue
+			}
+			mrs = append(mrs, mr)
+		}
+
+		continueToken = list.GetContinue()
+		if continueToken == "" {
+			break
+		}
+	}
+	return mrs, nil
 }
 
 // listClaims lists claims for a specific GVR and optional namespace.

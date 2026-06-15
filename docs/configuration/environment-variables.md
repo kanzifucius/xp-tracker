@@ -12,6 +12,8 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `CREATOR_ANNOTATION_KEY` | No | `""` | Annotation key for claim creator attribution |
 | `TEAM_ANNOTATION_KEY` | No | `""` | Annotation key for team attribution |
 | `COMPOSITION_LABEL_KEY` | No | `crossplane.io/composition-name` | Label key on XRs for composition name |
+| `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
+| `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with CRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `METRICS_ADDR` | No | `:8080` | Listen address for the HTTP metrics server |
 | `STORE_BACKEND` | No | `memory` | Persistent store backend: `memory` or `s3` |
@@ -30,6 +32,18 @@ xp-tracker now discovers claim and XR GVRs from Crossplane `CompositeResourceDef
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
 
 If no XRD-backed claim or XR resources can be discovered, startup fails with a clear error.
+
+## Provider MR discovery
+
+xp-tracker discovers provider Managed Resource (MR) GVRs from installed provider CRDs at startup. The exporter:
+
+1. Lists `CustomResourceDefinition` objects with a non-empty `pkg.crossplane.io/provider` label
+2. Derives each MR GVR from `spec.group` + storage/served version + `spec.names.plural`
+3. Merges any additional GVRs from `MR_GVRS` (deduplicated)
+
+During polling, only MRs with the composite label (`crossplane.io/composite` by default) are tracked. Claim linkage is enriched from MR claim labels or the backing XR.
+
+An empty MR GVR list is valid (for example, before providers are installed).
 
 ## Static GVR override format (deprecated)
 
@@ -82,6 +96,15 @@ XRs get their claim linkage through a symmetric enrichment when labels are missi
 
 1. The XR's `crossplane.io/claim-name` and `crossplane.io/claim-namespace` labels are used when present
 2. Otherwise, xp-tracker finds the claim whose `spec.resourceRef.name` matches the XR name and copies the claim's name and namespace
+
+## Composite label (MRs)
+
+The `COMPOSITE_LABEL_KEY` tells xp-tracker which label on provider MRs links them to a composite (XR). The default (`crossplane.io/composite`) matches standard Crossplane installations.
+
+MRs are only polled when this label is present. Claim linkage is enriched in two steps:
+
+1. Direct `crossplane.io/claim-name` and `crossplane.io/claim-namespace` labels on the MR are used when present
+2. Otherwise, xp-tracker looks up the XR named by the composite label and copies the XR's claim name and namespace
 
 ## Deployment via ConfigMap
 

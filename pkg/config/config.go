@@ -19,6 +19,12 @@ type Config struct {
 	// XRGVRs is the list of composite resource GroupVersionResources to poll.
 	XRGVRs []schema.GroupVersionResource
 
+	// MRGVRs is the list of provider Managed Resource GroupVersionResources to poll.
+	MRGVRs []schema.GroupVersionResource
+
+	// MRProviderNames maps GVR key (group/version/resource) to provider package name.
+	MRProviderNames map[string]string
+
 	// Namespaces restricts watches to these namespaces. Empty means all.
 	Namespaces []string
 
@@ -30,6 +36,9 @@ type Config struct {
 
 	// CompositionLabelKey is the label key on XRs identifying the Composition.
 	CompositionLabelKey string
+
+	// CompositeLabelKey is the label key on MRs linking them to a composite (XR).
+	CompositeLabelKey string
 
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
@@ -56,6 +65,7 @@ type Config struct {
 
 const (
 	defaultCompositionLabelKey = "crossplane.io/composition-name"
+	defaultCompositeLabelKey   = "crossplane.io/composite"
 	defaultPollInterval        = 30
 	defaultMetricsAddr         = ":8080"
 	defaultStoreBackend        = "memory"
@@ -67,8 +77,10 @@ const (
 func Load() (*Config, error) {
 	cfg := &Config{
 		CompositionLabelKey: defaultCompositionLabelKey,
+		CompositeLabelKey:   defaultCompositeLabelKey,
 		PollIntervalSeconds: defaultPollInterval,
 		MetricsAddr:         defaultMetricsAddr,
+		MRProviderNames:     make(map[string]string),
 	}
 
 	// Optional: CLAIM_GVRS (deprecated in favour of XRD discovery)
@@ -105,6 +117,20 @@ func Load() (*Config, error) {
 	// Optional: COMPOSITION_LABEL_KEY
 	if v := os.Getenv("COMPOSITION_LABEL_KEY"); v != "" {
 		cfg.CompositionLabelKey = v
+	}
+
+	// Optional: COMPOSITE_LABEL_KEY
+	if v := os.Getenv("COMPOSITE_LABEL_KEY"); v != "" {
+		cfg.CompositeLabelKey = v
+	}
+
+	// Optional: MR_GVRS (merged with CRD discovery at startup)
+	if mrRaw := os.Getenv("MR_GVRS"); mrRaw != "" {
+		mrGVRs, err := ParseGVRs(mrRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MR_GVRS: %w", err)
+		}
+		cfg.MRGVRs = mrGVRs
 	}
 
 	// Optional: POLL_INTERVAL_SECONDS

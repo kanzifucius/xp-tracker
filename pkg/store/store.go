@@ -40,17 +40,39 @@ type XRInfo struct {
 	CreatedAt   time.Time `json:"createdAt"` // metadata.creationTimestamp
 }
 
+// MRInfo holds extracted metadata for a single Crossplane provider Managed Resource.
+type MRInfo struct {
+	GVR            string    `json:"gvr"`
+	Group          string    `json:"group"`
+	Kind           string    `json:"kind"`
+	Namespace      string    `json:"namespace"`
+	Name           string    `json:"name"`
+	XRName         string    `json:"xrName"`         // crossplane.io/composite label
+	ClaimName      string    `json:"claimName"`      // enriched from XR or MR labels
+	ClaimNS        string    `json:"claimNamespace"` // enriched from XR or MR labels
+	Provider       string    `json:"provider"`       // pkg.crossplane.io/provider from CRD discovery
+	ProviderConfig string    `json:"providerConfig"` // spec.providerConfigRef.name
+	Synced         bool      `json:"synced"`
+	Ready          bool      `json:"ready"`
+	Reason         string    `json:"reason"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
 // Store is the interface for claim and XR metadata storage.
 // Implementations must be safe for concurrent use.
 type Store interface {
 	ReplaceClaims(gvr string, items []ClaimInfo)
 	ReplaceXRs(gvr string, items []XRInfo)
+	ReplaceMRs(gvr string, items []MRInfo)
 	EnrichClaimCompositions()
 	EnrichXRClaims()
+	EnrichMRClaims()
 	SnapshotClaims() []ClaimInfo
 	SnapshotXRs() []XRInfo
+	SnapshotMRs() []MRInfo
 	ClaimCount() int
 	XRCount() int
+	MRCount() int
 }
 
 // PersistentStore extends Store with durable persistence capabilities.
@@ -68,6 +90,7 @@ type PersistentStore interface {
 type Snapshot struct {
 	Claims      []ClaimInfo `json:"claims"`
 	XRs         []XRInfo    `json:"xrs"`
+	MRs         []MRInfo    `json:"mrs,omitempty"`
 	PersistedAt time.Time   `json:"persistedAt"`
 }
 
@@ -77,6 +100,7 @@ type MemoryStore struct {
 	mu     sync.RWMutex
 	claims map[string]ClaimInfo // keyed by "namespace/name"
 	xrs    map[string]XRInfo    // keyed by "namespace/name" (or just "name" for cluster-scoped)
+	mrs    map[string]MRInfo    // keyed by "namespace/name"
 }
 
 // New creates a new empty MemoryStore.
@@ -84,6 +108,7 @@ func New() *MemoryStore {
 	return &MemoryStore{
 		claims: make(map[string]ClaimInfo),
 		xrs:    make(map[string]XRInfo),
+		mrs:    make(map[string]MRInfo),
 	}
 }
 
@@ -136,6 +161,28 @@ func (s *MemoryStore) ReplaceXRs(gvr string, items []XRInfo) {
 	}
 }
 
+// ReplaceMRs atomically replaces the stored MRs for a given GVR.
+func (s *MemoryStore) ReplaceMRs(gvr string, items []MRInfo) {
+	newKeys := make(map[string]struct{}, len(items))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, m := range items {
+		key := objectKey(m.Namespace, m.Name)
+		newKeys[key] = struct{}{}
+		s.mrs[key] = m
+	}
+
+	for key, existing := range s.mrs {
+		if existing.GVR != gvr {
+			continue
+		}
+		if _, ok := newKeys[key]; !ok {
+			delete(s.mrs, key)
+		}
+	}
+}
+
 // EnrichXRClaims looks up each XR without claim labels in the claim store and
 // copies ClaimName and ClaimNS from the claim whose spec.resourceRef.name
 // matches the XR name. Label-derived values are not overwritten. Must be
@@ -179,6 +226,28 @@ func (s *MemoryStore) EnrichClaimCompositions() {
 	}
 }
 
+// EnrichMRClaims copies claim linkage onto MRs from the backing XR store when
+// claim fields are not already set from MR labels. Must be called after
+// claims, XRs, and MRs have been replaced for the current polling cycle.
+func (s *MemoryStore) EnrichMRClaims() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, mr := range s.mrs {
+		if mr.ClaimName != "" {
+			continue
+		}
+		if mr.XRName == "" {
+			continue
+		}
+		if xr, ok := s.xrs[mr.XRName]; ok {
+			mr.ClaimName = xr.ClaimName
+			mr.ClaimNS = xr.ClaimNS
+			s.mrs[key] = mr
+		}
+	}
+}
+
 // SnapshotClaims returns a copy of all stored claims.
 func (s *MemoryStore) SnapshotClaims() []ClaimInfo {
 	s.mu.RLock()
@@ -201,6 +270,17 @@ func (s *MemoryStore) SnapshotXRs() []XRInfo {
 	return out
 }
 
+// SnapshotMRs returns a copy of all stored MRs.
+func (s *MemoryStore) SnapshotMRs() []MRInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]MRInfo, 0, len(s.mrs))
+	for _, m := range s.mrs {
+		out = append(out, m)
+	}
+	return out
+}
+
 // ClaimCount returns the total number of stored claims.
 func (s *MemoryStore) ClaimCount() int {
 	s.mu.RLock()
@@ -213,6 +293,13 @@ func (s *MemoryStore) XRCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.xrs)
+}
+
+// MRCount returns the total number of stored MRs.
+func (s *MemoryStore) MRCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.mrs)
 }
 
 // objectKey produces a map key from a namespace and name.

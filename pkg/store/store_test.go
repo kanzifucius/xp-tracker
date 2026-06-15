@@ -198,6 +198,49 @@ func TestEnrichXRClaims(t *testing.T) {
 	}
 }
 
+func TestReplaceMRs(t *testing.T) {
+	s := New()
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "default", Name: "nop-1", XRName: "xr-1"},
+	})
+	if s.MRCount() != 1 {
+		t.Fatalf("expected 1 MR, got %d", s.MRCount())
+	}
+}
+
+func TestEnrichMRClaims(t *testing.T) {
+	s := New()
+
+	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Name: "xr-abc", ClaimName: "widget-a", ClaimNS: "team-alpha"},
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Name: "xr-labeled", ClaimName: "direct-claim", ClaimNS: "direct-ns"},
+	})
+
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "default", Name: "nop-1", XRName: "xr-abc"},
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "default", Name: "nop-2", XRName: "xr-labeled", ClaimName: "label-claim", ClaimNS: "label-ns"},
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "default", Name: "nop-3", XRName: "xr-missing"},
+	})
+
+	s.EnrichMRClaims()
+
+	snap := s.SnapshotMRs()
+	byName := make(map[string]MRInfo)
+	for _, m := range snap {
+		byName[m.Name] = m
+	}
+
+	if byName["nop-1"].ClaimName != "widget-a" || byName["nop-1"].ClaimNS != "team-alpha" {
+		t.Errorf("nop-1: expected claim widget-a/team-alpha, got %q/%q", byName["nop-1"].ClaimName, byName["nop-1"].ClaimNS)
+	}
+	if byName["nop-2"].ClaimName != "label-claim" || byName["nop-2"].ClaimNS != "label-ns" {
+		t.Errorf("nop-2: expected label-derived claim preserved, got %q/%q", byName["nop-2"].ClaimName, byName["nop-2"].ClaimNS)
+	}
+	if byName["nop-3"].ClaimName != "" {
+		t.Errorf("nop-3: expected empty claim name, got %q", byName["nop-3"].ClaimName)
+	}
+}
+
 func TestSnapshotClaims_IsCopy(t *testing.T) {
 	s := New()
 	s.ReplaceClaims("g1/v1/k1s", []ClaimInfo{
