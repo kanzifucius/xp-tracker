@@ -16,6 +16,7 @@ import (
 func NewDynamicClient() (dynamic.Interface, error) {
 	cfg, err := rest.InClusterConfig()
 	if err == nil {
+		applyClientLimits(cfg)
 		return dynamic.NewForConfig(cfg)
 	}
 
@@ -34,5 +35,17 @@ func NewDynamicClient() (dynamic.Interface, error) {
 		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
 	}
 
+	applyClientLimits(cfg)
 	return dynamic.NewForConfig(cfg)
+}
+
+// applyClientLimits raises the default client-side rate limits.
+//
+// The Kubernetes client defaults (5 QPS / 10 burst) are too low when the
+// poller lists hundreds of MR GVRs concurrently. 100 QPS / 200 burst gives
+// the concurrent worker pool (mrPollConcurrency workers) enough headroom
+// without approaching EKS API server limits.
+func applyClientLimits(cfg *rest.Config) {
+	cfg.QPS = 100
+	cfg.Burst = 200
 }

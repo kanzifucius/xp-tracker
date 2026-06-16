@@ -3,8 +3,10 @@ package kube
 import (
 	"context"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -13,6 +15,16 @@ import (
 	"github.com/kanzifucius/xp-tracker/pkg/metrics"
 	"github.com/kanzifucius/xp-tracker/pkg/store"
 )
+
+// mrPollConcurrency is the maximum number of concurrent MR GVR list calls per
+// poll cycle. 1055 GVRs polled sequentially takes minutes; a bounded worker
+// pool reduces that to seconds.
+//
+// This must be kept in proportion to the client QPS/Burst configured in
+// NewDynamicClient. At 20 workers and 100 QPS / 200 burst the initial wave
+// is absorbed by the burst allowance and steady-state throughput stays well
+// within the QPS ceiling.
+const mrPollConcurrency = 20
 
 // Poller periodically lists Crossplane claims and XRs from the Kubernetes API
 // and updates the in-memory store.
@@ -72,11 +84,11 @@ func (p *Poller) poll(ctx context.Context) {
 		}
 	}
 
-	for _, gvr := range p.cfg.MRGVRs {
-		if err := p.pollMRs(ctx, gvr); err != nil {
-			hadErrors = true
-			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
-		}
+	// MR polling is fan-out: there can be 1000+ GVRs (one per provider resource
+	// type). Sequential listing would take minutes; a bounded worker pool keeps
+	// it to seconds without flooding the API server.
+	if mrErrors := p.pollMRsConcurrent(ctx); mrErrors {
+		hadErrors = true
 	}
 
 	// Enrich claims with composition data from XRs, XRs with claim data from claims,
@@ -189,6 +201,36 @@ func (p *Poller) pollXRs(ctx context.Context, gvr schema.GroupVersionResource) e
 	p.store.ReplaceXRs(gvrStr, allXRs)
 	slog.Debug("XRs updated", "gvr", gvrStr, "count", len(allXRs))
 	return nil
+}
+
+// pollMRsConcurrent fans out MR polling across all configured GVRs using a
+// bounded worker pool. It returns true if any GVR produced an error.
+func (p *Poller) pollMRsConcurrent(ctx context.Context) (hadErrors bool) {
+	if len(p.cfg.MRGVRs) == 0 {
+		return false
+	}
+
+	var errCount atomic.Int64
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(mrPollConcurrency)
+
+	for _, gvr := range p.cfg.MRGVRs {
+		gvr := gvr // capture loop variable (pre-Go 1.22)
+		g.Go(func() error {
+			if err := p.pollMRs(ctx, gvr); err != nil {
+				errCount.Add(1)
+				metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
+			}
+			// Always return nil so errgroup does not cancel the context on the
+			// first error — we want all GVRs attempted every cycle.
+			return nil
+		})
+	}
+
+	// g.Wait() cannot error (we never return non-nil above).
+	_ = g.Wait()
+	return errCount.Load() > 0
 }
 
 // pollMRs lists claim-linked MRs for a given GVR and updates the store.

@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -322,6 +323,70 @@ func TestPoller_StaleRemoval(t *testing.T) {
 	poller.poll(context.Background())
 	if s.ClaimCount() != 0 {
 		t.Fatalf("expected 0 claims after deletion, got %d", s.ClaimCount())
+	}
+}
+
+func TestPoller_PollMRsConcurrent(t *testing.T) {
+	// Build N MR GVRs to exercise the concurrent fan-out path.
+	const n = 30 // more than mrPollConcurrency (20) to test queuing
+
+	claimGVR := schema.GroupVersionResource{Group: "g", Version: "v1", Resource: "things"}
+	xrGVR := schema.GroupVersionResource{Group: "g", Version: "v1", Resource: "xthings"}
+
+	gvrMap := map[schema.GroupVersionResource]string{
+		claimGVR: "ThingList",
+		xrGVR:    "XThingList",
+	}
+	mrGVRs := make([]schema.GroupVersionResource, n)
+	providerNames := make(map[string]string, n)
+	var objects []runtime.Object
+
+	for i := range n {
+		gvr := schema.GroupVersionResource{
+			Group:    fmt.Sprintf("provider-%d.crossplane.io", i),
+			Version:  "v1alpha1",
+			Resource: "widgets",
+		}
+		mrGVRs[i] = gvr
+		listKind := fmt.Sprintf("Widget%dList", i)
+		gvrMap[gvr] = listKind
+		key := GVRString(gvr)
+		providerNames[key] = fmt.Sprintf("provider-%d", i)
+
+		// Add one MR with the composite label so it is stored.
+		obj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": gvr.Group + "/" + gvr.Version,
+				"kind":       "Widget",
+				"metadata": map[string]interface{}{
+					"name": fmt.Sprintf("widget-%d", i),
+					"labels": map[string]interface{}{
+						"crossplane.io/composite": fmt.Sprintf("xr-%d", i),
+					},
+				},
+			},
+		}
+		objects = append(objects, obj)
+	}
+
+	client := newFakeClient(gvrMap, objects...)
+
+	cfg := &config.Config{
+		ClaimGVRs:           []schema.GroupVersionResource{claimGVR},
+		XRGVRs:              []schema.GroupVersionResource{xrGVR},
+		MRGVRs:              mrGVRs,
+		MRProviderNames:     providerNames,
+		CompositeLabelKey:   "crossplane.io/composite",
+		CompositionLabelKey: "crossplane.io/composition-name",
+		PollIntervalSeconds: 30,
+	}
+
+	s := store.New()
+	poller := NewPoller(client, cfg, s)
+	poller.poll(context.Background())
+
+	if got := s.MRCount(); got != n {
+		t.Fatalf("expected %d MRs, got %d", n, got)
 	}
 }
 
