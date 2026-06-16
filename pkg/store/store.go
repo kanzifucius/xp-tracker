@@ -50,7 +50,7 @@ type MRInfo struct {
 	XRName         string    `json:"xrName"`         // crossplane.io/composite label
 	ClaimName      string    `json:"claimName"`      // enriched from XR or MR labels
 	ClaimNS        string    `json:"claimNamespace"` // enriched from XR or MR labels
-	Provider       string    `json:"provider"`       // pkg.crossplane.io/provider from CRD discovery
+	Provider       string    `json:"provider"`       // pkg.crossplane.io/package from MRD discovery
 	ProviderConfig string    `json:"providerConfig"` // spec.providerConfigRef.name
 	Synced         bool      `json:"synced"`
 	Ready          bool      `json:"ready"`

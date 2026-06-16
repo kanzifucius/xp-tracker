@@ -156,9 +156,9 @@ func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *co
 	cfg.ClaimGVRs = claimGVRs
 	cfg.XRGVRs = xrGVRs
 
-	mrGVRs, providerNames, err := kube.DiscoverMRGVRsFromCRDs(ctx, client)
+	mrGVRs, providerNames, err := kube.DiscoverMRGVRsFromMRDs(ctx, client)
 	if err != nil {
-		return fmt.Errorf("discover MR GVRs from provider CRDs: %w", err)
+		return fmt.Errorf("discover MR GVRs from managed resource definitions: %w", err)
 	}
 
 	if cfg.MRProviderNames == nil {

@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-const providerCRDLabelKey = "pkg.crossplane.io/provider"
+const packageLabelKey = "pkg.crossplane.io/package"
 
 var xrdGVR = schema.GroupVersionResource{
 	Group:    "apiextensions.crossplane.io",
@@ -19,10 +19,10 @@ var xrdGVR = schema.GroupVersionResource{
 	Resource: "compositeresourcedefinitions",
 }
 
-var crdGVR = schema.GroupVersionResource{
-	Group:    "apiextensions.k8s.io",
-	Version:  "v1",
-	Resource: "customresourcedefinitions",
+var mrdGVR = schema.GroupVersionResource{
+	Group:    "apiextensions.crossplane.io",
+	Version:  "v1alpha1",
+	Resource: "managedresourcedefinitions",
 }
 
 // DiscoverFromXRD discovers claim and XR GVRs from Crossplane XRDs.
@@ -54,52 +54,75 @@ func DiscoverFromXRD(ctx context.Context, client dynamic.Interface) ([]schema.Gr
 	return mapToSortedSlice(claimSet), mapToSortedSlice(xrSet), nil
 }
 
-// DiscoverMRGVRsFromCRDs discovers provider Managed Resource GVRs from installed
-// provider CRDs labelled with pkg.crossplane.io/provider.
-func DiscoverMRGVRsFromCRDs(ctx context.Context, client dynamic.Interface) ([]schema.GroupVersionResource, map[string]string, error) {
-	list, err := client.Resource(crdGVR).List(ctx, metav1.ListOptions{})
+// DiscoverMRGVRsFromMRDs discovers provider Managed Resource GVRs from Active
+// Crossplane ManagedResourceDefinitions.
+func DiscoverMRGVRsFromMRDs(ctx context.Context, client dynamic.Interface) ([]schema.GroupVersionResource, map[string]string, error) {
+	list, err := client.Resource(mrdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, nil, fmt.Errorf("list customresourcedefinitions: %w", err)
+		return nil, nil, fmt.Errorf("list managedresourcedefinitions: %w", err)
 	}
 
 	gvrSet := map[string]schema.GroupVersionResource{}
 	providerNames := map[string]string{}
 
 	for _, item := range list.Items {
-		provider, ok := item.GetLabels()[providerCRDLabelKey]
-		if !ok || provider == "" {
+		if !isActiveMRD(item) {
 			continue
 		}
 
-		mrGVR, err := crdToGVR(item)
+		mrGVR, err := mrdToGVR(item)
 		if err != nil {
 			name := item.GetName()
 			if name == "" {
 				name = "<unknown>"
 			}
-			return nil, nil, fmt.Errorf("derive GVR from CRD %q: %w", name, err)
+			return nil, nil, fmt.Errorf("derive GVR from MRD %q: %w", name, err)
 		}
 
 		key := gvrKey(mrGVR)
 		gvrSet[key] = mrGVR
-		providerNames[key] = provider
+		providerNames[key] = providerFromMRD(item)
 	}
 
 	return mapToSortedSlice(gvrSet), providerNames, nil
 }
 
-func crdToGVR(crd unstructured.Unstructured) (schema.GroupVersionResource, error) {
-	group, found, err := unstructured.NestedString(crd.Object, "spec", "group")
+func isActiveMRD(mrd unstructured.Unstructured) bool {
+	state, found, err := unstructured.NestedString(mrd.Object, "spec", "state")
+	if err != nil || !found {
+		return false
+	}
+	return state == "Active"
+}
+
+func providerFromMRD(mrd unstructured.Unstructured) string {
+	if pkg := mrd.GetLabels()[packageLabelKey]; pkg != "" {
+		return pkg
+	}
+	for _, ref := range mrd.GetOwnerReferences() {
+		if ref.Kind == "Provider" && ref.Name != "" {
+			return ref.Name
+		}
+	}
+	return ""
+}
+
+func mrdToGVR(mrd unstructured.Unstructured) (schema.GroupVersionResource, error) {
+	return apiExtensionSpecToGVR(mrd)
+}
+
+func apiExtensionSpecToGVR(obj unstructured.Unstructured) (schema.GroupVersionResource, error) {
+	group, found, err := unstructured.NestedString(obj.Object, "spec", "group")
 	if err != nil || !found || group == "" {
 		return schema.GroupVersionResource{}, fmt.Errorf("missing spec.group")
 	}
 
-	plural, found, err := unstructured.NestedString(crd.Object, "spec", "names", "plural")
+	plural, found, err := unstructured.NestedString(obj.Object, "spec", "names", "plural")
 	if err != nil || !found || plural == "" {
 		return schema.GroupVersionResource{}, fmt.Errorf("missing spec.names.plural")
 	}
 
-	version, err := selectCRDVersion(crd)
+	version, err := selectCRDVersion(obj)
 	if err != nil {
 		return schema.GroupVersionResource{}, err
 	}

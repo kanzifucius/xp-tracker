@@ -124,7 +124,7 @@ func Load() (*Config, error) {
 		cfg.CompositeLabelKey = v
 	}
 
-	// Optional: MR_GVRS (merged with CRD discovery at startup)
+	// Optional: MR_GVRS (merged with MRD discovery at startup)
 	if mrRaw := os.Getenv("MR_GVRS"); mrRaw != "" {
 		mrGVRs, err := ParseGVRs(mrRaw)
 		if err != nil {

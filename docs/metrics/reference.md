@@ -75,7 +75,7 @@ Total number of claim-linked provider managed resources (MRs), broken down by la
 | `xr_name` | Composite (XR) name from the composite label |
 | `claim_name` | Claim name linked to the MR (from MR labels or XR enrichment) |
 | `claim_namespace` | Claim namespace linked to the MR |
-| `provider` | Provider package name from CRD discovery (e.g. `provider-nop`) |
+| `provider` | Provider package name from MRD discovery (e.g. `provider-nop`) |
 | `provider_config` | `spec.providerConfigRef.name` |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |

@@ -30,7 +30,7 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 - **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, `namespace`, and `composition`. These are the dimensions that matter when you're running a platform, not just an operator.
 - **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which compositions are most adopted?" -- all via standard PromQL queries and Grafana dashboards.
 - **Chargeback and showback** -- The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
-- **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs and provider MR GVRs from installed provider CRDs at startup.
+- **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs and provider MR GVRs from Active ManagedResourceDefinitions at startup.
 - **JSON bookkeeping endpoint** -- Beyond Prometheus, the `/bookkeeping` endpoint returns a full snapshot of all tracked resources as JSON. Useful for CLI tooling, external integrations, audit trails, or any consumer that doesn't want to go through PromQL.
 
 ### Standard Crossplane metrics vs xp-tracker
@@ -170,7 +170,7 @@ The snapshot is a single JSON file at `s3://<bucket>/<prefix>/snapshot.json`, ov
 
 ## Configuration
 
-xp-tracker discovers claim and XR GVRs from Crossplane `CompositeResourceDefinition` objects and provider MR GVRs from installed provider CRDs at startup.
+xp-tracker discovers claim and XR GVRs from Crossplane `CompositeResourceDefinition` objects and provider MR GVRs from Active `ManagedResourceDefinition` objects at startup.
 Environment variables are still used for namespace filtering, annotation/label keys, polling cadence, server address, and optional static GVR overrides.
 
 | Variable | Required | Default | Description |
@@ -182,7 +182,7 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `TEAM_ANNOTATION_KEY` | no | `""` | Annotation key for claim team |
 | `COMPOSITION_LABEL_KEY` | no | `crossplane.io/composition-name` | Label key on XRs for composition |
 | `COMPOSITE_LABEL_KEY` | no | `crossplane.io/composite` | Label key on MRs linking them to a composite |
-| `MR_GVRS` | no | `""` | Additional MR GVRs merged with CRD discovery |
+| `MR_GVRS` | no | `""` | Additional MR GVRs merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
 | `METRICS_ADDR` | no | `:8080` | Listen address for HTTP metrics |
 | `STORE_BACKEND` | no | `memory` | Persistent store backend: `memory` or `s3` |
@@ -204,7 +204,7 @@ If no claim or XR GVRs can be discovered from XRDs, startup fails with a clear e
 
 ### Provider MR discovery
 
-At startup, xp-tracker also lists provider CRDs labelled with `pkg.crossplane.io/provider` and derives MR GVRs from `spec.group`, storage/served version, and `spec.names.plural`. Additional GVRs from `MR_GVRS` are merged in. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
+At startup, xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`). Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
 
 ### Static GVR overrides (deprecated)
 

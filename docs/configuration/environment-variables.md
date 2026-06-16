@@ -13,7 +13,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `TEAM_ANNOTATION_KEY` | No | `""` | Annotation key for team attribution |
 | `COMPOSITION_LABEL_KEY` | No | `crossplane.io/composition-name` | Label key on XRs for composition name |
 | `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
-| `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with CRD discovery |
+| `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `METRICS_ADDR` | No | `:8080` | Listen address for the HTTP metrics server |
 | `STORE_BACKEND` | No | `memory` | Persistent store backend: `memory` or `s3` |
@@ -35,15 +35,17 @@ If no XRD-backed claim or XR resources can be discovered, startup fails with a c
 
 ## Provider MR discovery
 
-xp-tracker discovers provider Managed Resource (MR) GVRs from installed provider CRDs at startup. The exporter:
+xp-tracker discovers provider Managed Resource (MR) GVRs from Crossplane `ManagedResourceDefinition` objects at startup. The exporter:
 
-1. Lists `CustomResourceDefinition` objects with a non-empty `pkg.crossplane.io/provider` label
-2. Derives each MR GVR from `spec.group` + storage/served version + `spec.names.plural`
-3. Merges any additional GVRs from `MR_GVRS` (deduplicated)
+1. Lists `managedresourcedefinitions.apiextensions.crossplane.io/v1alpha1`
+2. Keeps only MRDs with `spec.state: Active` (types with a live CRD)
+3. Derives each MR GVR from `spec.group` + storage/served version + `spec.names.plural`
+4. Attributes the provider package from `pkg.crossplane.io/package` or a `Provider` owner reference
+5. Merges any additional GVRs from `MR_GVRS` (deduplicated)
 
 During polling, only MRs with the composite label (`crossplane.io/composite` by default) are tracked. Claim linkage is enriched from MR claim labels or the backing XR.
 
-An empty MR GVR list is valid (for example, before providers are installed).
+An empty MR GVR list is valid (for example, when MRD conversion is disabled — use `MR_GVRS` in that case).
 
 ## Static GVR override format (deprecated)
 

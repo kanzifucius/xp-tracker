@@ -101,7 +101,7 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
 | `xrName` | string | Composite (XR) name from the composite label |
 | `claimName` | string | Claim name (from MR labels or XR enrichment) |
 | `claimNamespace` | string | Claim namespace |
-| `provider` | string | Provider package name from CRD discovery |
+| `provider` | string | Provider package name from MRD discovery |
 | `providerConfig` | string | `spec.providerConfigRef.name` |
 | `ready` | boolean | Whether the Ready condition is True |
 | `reason` | string | Ready condition reason |
