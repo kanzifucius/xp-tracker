@@ -61,11 +61,16 @@ func NewS3Store(mem *MemoryStore, client S3Client, bucket, keyPrefix string) *S3
 
 func (s *S3Store) ReplaceClaims(gvr string, items []ClaimInfo) { s.mem.ReplaceClaims(gvr, items) }
 func (s *S3Store) ReplaceXRs(gvr string, items []XRInfo)       { s.mem.ReplaceXRs(gvr, items) }
+func (s *S3Store) ReplaceMRs(gvr string, items []MRInfo)       { s.mem.ReplaceMRs(gvr, items) }
 func (s *S3Store) EnrichClaimCompositions()                    { s.mem.EnrichClaimCompositions() }
+func (s *S3Store) EnrichXRClaims()                             { s.mem.EnrichXRClaims() }
+func (s *S3Store) EnrichMRClaims()                             { s.mem.EnrichMRClaims() }
 func (s *S3Store) SnapshotClaims() []ClaimInfo                 { return s.mem.SnapshotClaims() }
 func (s *S3Store) SnapshotXRs() []XRInfo                       { return s.mem.SnapshotXRs() }
+func (s *S3Store) SnapshotMRs() []MRInfo                       { return s.mem.SnapshotMRs() }
 func (s *S3Store) ClaimCount() int                             { return s.mem.ClaimCount() }
 func (s *S3Store) XRCount() int                                { return s.mem.XRCount() }
+func (s *S3Store) MRCount() int                                { return s.mem.MRCount() }
 
 // ---------------------------------------------------------------------------
 // PersistentStore implementation
@@ -79,6 +84,7 @@ func (s *S3Store) Persist(ctx context.Context) error {
 	snap := Snapshot{
 		Claims:      s.mem.SnapshotClaims(),
 		XRs:         s.mem.SnapshotXRs(),
+		MRs:         s.mem.SnapshotMRs(),
 		PersistedAt: time.Now().UTC(),
 	}
 
@@ -102,6 +108,7 @@ func (s *S3Store) Persist(ctx context.Context) error {
 		"key", s.key,
 		"claims", len(snap.Claims),
 		"xrs", len(snap.XRs),
+		"mrs", len(snap.MRs),
 	)
 	return nil
 }
@@ -159,11 +166,20 @@ func (s *S3Store) Restore(ctx context.Context) error {
 		s.mem.ReplaceXRs(gvr, items)
 	}
 
+	mrsByGVR := make(map[string][]MRInfo)
+	for _, m := range snap.MRs {
+		mrsByGVR[m.GVR] = append(mrsByGVR[m.GVR], m)
+	}
+	for gvr, items := range mrsByGVR {
+		s.mem.ReplaceMRs(gvr, items)
+	}
+
 	slog.Info("restored store snapshot from S3",
 		"bucket", s.bucket,
 		"key", s.key,
 		"claims", len(snap.Claims),
 		"xrs", len(snap.XRs),
+		"mrs", len(snap.MRs),
 		"persistedAt", snap.PersistedAt,
 	)
 	return nil

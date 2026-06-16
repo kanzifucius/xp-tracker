@@ -40,6 +40,9 @@ func TestBookkeeping_Empty(t *testing.T) {
 	if len(resp.XRs) != 0 {
 		t.Errorf("expected 0 XRs, got %d", len(resp.XRs))
 	}
+	if len(resp.MRs) != 0 {
+		t.Errorf("expected 0 MRs, got %d", len(resp.MRs))
+	}
 	if resp.GeneratedAt == "" {
 		t.Error("expected non-empty generatedAt")
 	}
@@ -177,6 +180,44 @@ func TestBookkeeping_GeneratedAtIsUTC(t *testing.T) {
 
 	if parsed.Location() != time.UTC {
 		t.Errorf("generatedAt should be UTC, got %v", parsed.Location())
+	}
+}
+
+func TestBookkeeping_WithMRs(t *testing.T) {
+	s := store.New()
+	createdAt := time.Now().Add(-30 * time.Minute)
+
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []store.MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "default", Name: "nop-1", XRName: "xr-1",
+			ClaimName: "widget-a", ClaimNS: "team-alpha",
+			Provider: "provider-nop", ProviderConfig: "default",
+			Ready: true, Reason: "Available", CreatedAt: createdAt,
+		},
+	})
+
+	handler := bookkeepingHandler(s)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/bookkeeping", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var resp BookkeepingResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.MRs) != 1 {
+		t.Fatalf("expected 1 MR, got %d", len(resp.MRs))
+	}
+	mr := resp.MRs[0]
+	if mr.Name != "nop-1" || mr.XRName != "xr-1" {
+		t.Errorf("unexpected MR: %+v", mr)
+	}
+	if mr.ClaimName != "widget-a" || mr.ClaimNamespace != "team-alpha" {
+		t.Errorf("claim linkage: got %q/%q", mr.ClaimName, mr.ClaimNamespace)
+	}
+	if mr.Provider != "provider-nop" || mr.ProviderConfig != "default" {
+		t.Errorf("provider fields: got %q/%q", mr.Provider, mr.ProviderConfig)
 	}
 }
 

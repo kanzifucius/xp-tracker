@@ -34,6 +34,12 @@ var (
 		Help: "Current number of XRs in the in-memory store.",
 	})
 
+	// StoreMRs reports the number of MRs currently held in the store.
+	StoreMRs = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "xp_tracker_store_mrs",
+		Help: "Current number of provider MRs in the in-memory store.",
+	})
+
 	// S3PersistDuration tracks the duration of S3 persist operations.
 	S3PersistDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "xp_tracker_s3_persist_duration_seconds",
@@ -50,6 +56,7 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		PollErrors,
 		StoreClaims,
 		StoreXRs,
+		StoreMRs,
 		S3PersistDuration,
 	)
 }

@@ -88,6 +88,37 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	return xr
 }
 
+// UnstructuredToMR converts an unstructured Kubernetes object to an MRInfo.
+func UnstructuredToMR(obj unstructured.Unstructured, gvr schema.GroupVersionResource, cfg *config.Config, provider string) store.MRInfo {
+	mr := store.MRInfo{
+		GVR:       GVRString(gvr),
+		Group:     gvr.Group,
+		Kind:      obj.GetKind(),
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+		Provider:  provider,
+		CreatedAt: obj.GetCreationTimestamp().Time,
+	}
+
+	if mr.Kind == "" {
+		mr.Kind = resourceToKind(gvr.Resource)
+	}
+
+	labels := obj.GetLabels()
+	if cfg.CompositeLabelKey != "" {
+		mr.XRName = labels[cfg.CompositeLabelKey]
+	}
+	mr.ClaimName = labels["crossplane.io/claim-name"]
+	mr.ClaimNS = labels["crossplane.io/claim-namespace"]
+
+	mr.ProviderConfig = nestedString(obj.Object, "spec", "providerConfigRef", "name")
+
+	mr.Synced = extractConditionStatus(obj.Object, "Synced")
+	mr.Ready, mr.Reason = extractReadyCondition(obj.Object)
+
+	return mr
+}
+
 // extractReadyCondition finds the "Ready" condition in status.conditions and returns
 // (ready bool, reason string).
 func extractReadyCondition(obj map[string]interface{}) (bool, string) {

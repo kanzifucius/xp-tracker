@@ -15,7 +15,8 @@ rules:
   #
   # BEFORE deploying to production you MUST scope the rules to only the API
   # groups and resources that match your discovered claim/XR types plus
-  # compositeresourcedefinitions.apiextensions.crossplane.io for discovery.
+  # compositeresourcedefinitions.apiextensions.crossplane.io for discovery
+  # and managedresourcedefinitions.apiextensions.crossplane.io for MR discovery.
   # See deploy/overlays/example/ for a properly-scoped ClusterRole patch.
   #
   # Example scoped rule:

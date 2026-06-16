@@ -66,10 +66,12 @@ func run() error {
 	slog.Info("configuration loaded",
 		"claim_gvrs", formatGVRs(cfg.ClaimGVRs),
 		"xr_gvrs", formatGVRs(cfg.XRGVRs),
+		"mr_gvrs", formatGVRs(cfg.MRGVRs),
 		"namespaces", cfg.Namespaces,
 		"creator_annotation", cfg.CreatorAnnotationKey,
 		"team_annotation", cfg.TeamAnnotationKey,
 		"composition_label", cfg.CompositionLabelKey,
+		"composite_label", cfg.CompositeLabelKey,
 		"poll_interval_seconds", cfg.PollIntervalSeconds,
 		"metrics_addr", cfg.MetricsAddr,
 		"store_backend", cfg.StoreBackend,
@@ -153,5 +155,39 @@ func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *co
 	}
 	cfg.ClaimGVRs = claimGVRs
 	cfg.XRGVRs = xrGVRs
+
+	mrGVRs, providerNames, err := kube.DiscoverMRGVRsFromMRDs(ctx, client)
+	if err != nil {
+		return fmt.Errorf("discover MR GVRs from managed resource definitions: %w", err)
+	}
+
+	if cfg.MRProviderNames == nil {
+		cfg.MRProviderNames = make(map[string]string)
+	}
+	for key, name := range providerNames {
+		cfg.MRProviderNames[key] = name
+	}
+
+	// Merge env-configured MR_GVRS (additive, deduplicated).
+	seen := make(map[string]struct{}, len(mrGVRs)+len(cfg.MRGVRs))
+	merged := make([]schema.GroupVersionResource, 0, len(mrGVRs)+len(cfg.MRGVRs))
+	for _, gvr := range mrGVRs {
+		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, gvr)
+	}
+	for _, gvr := range cfg.MRGVRs {
+		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, gvr)
+	}
+	cfg.MRGVRs = merged
+
 	return nil
 }

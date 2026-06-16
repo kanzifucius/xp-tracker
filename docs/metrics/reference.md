@@ -1,6 +1,6 @@
 # Metrics Reference
 
-xp-tracker exposes eight Prometheus **gauge** metrics for Crossplane resources, plus five **self-monitoring** metrics for operational visibility.
+xp-tracker exposes twelve Prometheus **gauge** metrics for Crossplane resources, plus six **self-monitoring** metrics for operational visibility.
 
 ## Claim metrics
 
@@ -43,8 +43,8 @@ Total number of Crossplane composite resources (XRs), broken down by label tuple
 | `kind` | Resource kind (e.g. `XPostgreSQLInstance`) |
 | `namespace` | Kubernetes namespace (usually empty for cluster-scoped XRs) |
 | `name` | XR metadata name |
-| `claim_name` | Claim name linked to the XR (`crossplane.io/claim-name`) |
-| `claim_namespace` | Claim namespace linked to the XR (`crossplane.io/claim-namespace`) |
+| `claim_name` | Claim name linked to the XR (`crossplane.io/claim-name`, or backfilled from the claim's `spec.resourceRef.name`) |
+| `claim_namespace` | Claim namespace linked to the XR (`crossplane.io/claim-namespace`, or backfilled from the matching claim) |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |
 
@@ -59,6 +59,38 @@ Per-XR Synced condition status as a gauge (`1` for `true`, `0` for `false`). Sam
 ### `crossplane_xr_status_ready`
 
 Per-XR Ready condition status as a gauge (`1` for `true`, `0` for `false`). Same label set as `crossplane_xr_total`.
+
+## MR metrics
+
+### `crossplane_mr_total`
+
+Total number of claim-linked provider managed resources (MRs), broken down by label tuple.
+
+| Label | Description |
+|---|---|
+| `group` | API group from the GVR |
+| `kind` | Resource kind (e.g. `NopResource`) |
+| `namespace` | Kubernetes namespace |
+| `name` | MR metadata name |
+| `xr_name` | Composite (XR) name from the composite label |
+| `claim_name` | Claim name linked to the MR (from MR labels or XR enrichment) |
+| `claim_namespace` | Claim namespace linked to the MR |
+| `provider` | Provider package name from MRD discovery (e.g. `provider-nop`) |
+| `provider_config` | `spec.providerConfigRef.name` |
+| `synced` | Crossplane `Synced` condition status (`true`/`false`) |
+| `ready` | Crossplane `Ready` condition status (`true`/`false`) |
+
+### `crossplane_mr_ready`
+
+Number of MRs with `status.conditions` containing `type: Ready` and `status: "True"`. Same label set as `crossplane_mr_total`.
+
+### `crossplane_mr_status_synced`
+
+Per-MR Synced condition status as a gauge (`1` for `true`, `0` for `false`). Same label set as `crossplane_mr_total`.
+
+### `crossplane_mr_status_ready`
+
+Per-MR Ready condition status as a gauge (`1` for `true`, `0` for `false`). Same label set as `crossplane_mr_total`.
 
 ## Example output
 
@@ -115,6 +147,9 @@ This means cardinality is closely tied to the number of claims, with additional 
 ## Label notes
 
 - **Empty labels**: if an annotation key is not configured or the annotation is not present on a resource, the label value is an empty string (`""`).
+- **XR claim linkage**: `claim_name` and `claim_namespace` on XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name.
+- **MR claim linkage**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker looks up the XR named by `xr_name` and copies the XR's claim linkage.
+- **MR scope**: only provider MRs with the composite label are tracked.
 - **Composition enrichment**: composition is still available on the `/bookkeeping` payload, even though it is no longer a Prometheus label dimension.
 - **Namespace for XRs**: composite resources are typically cluster-scoped, so the `namespace` label is usually empty.
 
@@ -139,6 +174,10 @@ Gauge showing the current number of claims in the in-memory store, updated after
 ### `xp_tracker_store_xrs`
 
 Gauge showing the current number of XRs in the in-memory store, updated after each poll.
+
+### `xp_tracker_store_mrs`
+
+Gauge showing the current number of provider MRs in the in-memory store, updated after each poll.
 
 ### `xp_tracker_s3_persist_duration_seconds`
 

@@ -82,6 +82,29 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	assertLabel(t, labels, "ready", "true")
 }
 
+func TestXRCollector_EnrichedClaimLabels(t *testing.T) {
+	s := store.New()
+	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
+		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr-enriched", Synced: true, Ready: true},
+	})
+	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
+		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "team-a", Name: "claim-enriched", XRRef: "xr-enriched"},
+	})
+	s.EnrichXRClaims()
+
+	c := NewXRCollector(s)
+	families := gatherCollector(t, c)
+
+	totalFam := families["crossplane_xr_total"]
+	if totalFam == nil {
+		t.Fatal("missing crossplane_xr_total")
+	}
+
+	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "name", "xr-enriched")
+	assertLabel(t, labels, "claim_name", "claim-enriched")
+	assertLabel(t, labels, "claim_namespace", "team-a")
+}
+
 func TestXRCollector_MultipleCompositions(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{

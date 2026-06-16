@@ -32,6 +32,7 @@ func New(addr string, s store.Store) *Server {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(metrics.NewClaimCollector(s))
 	registry.MustRegister(metrics.NewXRCollector(s))
+	registry.MustRegister(metrics.NewMRCollector(s))
 	metrics.RegisterSelfMetrics(registry)
 
 	srv := &Server{
