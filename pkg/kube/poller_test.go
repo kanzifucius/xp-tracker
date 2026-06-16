@@ -339,7 +339,7 @@ func TestPoller_PollMRsConcurrent(t *testing.T) {
 	}
 	mrGVRs := make([]schema.GroupVersionResource, n)
 	providerNames := make(map[string]string, n)
-	var objects []runtime.Object
+	objects := make([]runtime.Object, 0, n)
 
 	for i := range n {
 		gvr := schema.GroupVersionResource{
