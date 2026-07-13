@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -37,9 +38,9 @@ func TestClaimCollector_Empty(t *testing.T) {
 func TestClaimCollector_SingleGroup(t *testing.T) {
 	s := store.New()
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "a", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: true, Ready: true},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "b", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: false, Ready: false},
-		{GVR: "g/v1/things", Group: "g", Kind: "Thing", Namespace: "ns1", Name: "c", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: true, Ready: true},
+		{GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing", Namespace: "ns1", Name: "a", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: true, Ready: true, Reason: "Available"},
+		{GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing", Namespace: "ns1", Name: "b", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: false, Ready: false, Reason: "Creating"},
+		{GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing", Namespace: "ns1", Name: "c", Creator: "alice", Team: "backend", Composition: "comp-a", Synced: true, Ready: true, Reason: "Available"},
 	})
 
 	c := NewClaimCollector(s)
@@ -78,12 +79,16 @@ func TestClaimCollector_SingleGroup(t *testing.T) {
 	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "claim_name", "a")
 	assertLabel(t, labels, "group", "g")
 	assertLabel(t, labels, "kind", "Thing")
+	assertLabel(t, labels, "version", "v1")
 	assertLabel(t, labels, "namespace", "ns1")
 	assertLabel(t, labels, "creator", "alice")
 	assertLabel(t, labels, "team", "backend")
 	assertLabel(t, labels, "claim_name", "a")
 	assertLabel(t, labels, "synced", "true")
 	assertLabel(t, labels, "ready", "true")
+	assertLabel(t, labels, "reason", "Available")
+	assertLabel(t, labels, "paused", "false")
+	assertLabel(t, labels, "deleting", "false")
 
 	statusSyncedFam := families["crossplane_claims_status_synced"]
 	if statusSyncedFam == nil {
@@ -140,6 +145,9 @@ func TestClaimCollector_EmptyLabels(t *testing.T) {
 	assertLabel(t, labels, "claim_name", "a")
 	assertLabel(t, labels, "synced", "false")
 	assertLabel(t, labels, "ready", "false")
+	assertLabel(t, labels, "reason", "")
+	assertLabel(t, labels, "paused", "false")
+	assertLabel(t, labels, "deleting", "false")
 }
 
 func TestClaimCollector_Describe(t *testing.T) {
@@ -154,8 +162,50 @@ func TestClaimCollector_Describe(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 4 {
-		t.Fatalf("expected 4 descriptors, got %d", count)
+	if count != 6 {
+		t.Fatalf("expected 6 descriptors, got %d", count)
+	}
+}
+
+func TestClaimCollector_Timestamps(t *testing.T) {
+	createdAt := time.Unix(1700000000, 0).UTC()
+	deletedAt := time.Unix(1700003600, 0).UTC()
+
+	s := store.New()
+	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
+		{
+			GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing", Namespace: "ns1", Name: "alive",
+			Synced: true, Ready: true, Reason: "Available", CreatedAt: createdAt,
+		},
+		{
+			GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing", Namespace: "ns1", Name: "dying",
+			Synced: false, Ready: false, Reason: "Deleting", CreatedAt: createdAt, DeletedAt: deletedAt, Paused: true,
+		},
+	})
+
+	c := NewClaimCollector(s)
+	families := gatherCollector(t, c)
+
+	createdFam := families["crossplane_claims_created_timestamp_seconds"]
+	if createdFam == nil || len(createdFam.GetMetric()) != 2 {
+		t.Fatalf("expected 2 created timestamp samples, got %v", createdFam)
+	}
+
+	deletionFam := families["crossplane_claims_deletion_timestamp_seconds"]
+	if deletionFam == nil || len(deletionFam.GetMetric()) != 1 {
+		t.Fatalf("expected 1 deletion timestamp sample, got %v", deletionFam)
+	}
+
+	aliveLabels := findLabelsByLabelValue(t, createdFam.GetMetric(), "claim_name", "alive")
+	assertLabel(t, aliveLabels, "deleting", "false")
+	assertLabel(t, aliveLabels, "paused", "false")
+
+	dyingLabels := findLabelsByLabelValue(t, deletionFam.GetMetric(), "claim_name", "dying")
+	assertLabel(t, dyingLabels, "deleting", "true")
+	assertLabel(t, dyingLabels, "paused", "true")
+	assertLabel(t, dyingLabels, "reason", "Deleting")
+	if got := deletionFam.GetMetric()[0].GetGauge().GetValue(); got != float64(deletedAt.Unix()) {
+		t.Errorf("deletion timestamp: got %v, want %v", got, deletedAt.Unix())
 	}
 }
 
