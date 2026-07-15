@@ -11,51 +11,62 @@ import (
 type ClaimInfo struct {
 	GVR         string    `json:"gvr"` // "group/version/resource" used to track which GVR produced this entry
 	Group       string    `json:"group"`
+	Version     string    `json:"version"` // API version from the GVR
 	Kind        string    `json:"kind"`
 	Namespace   string    `json:"namespace"`
 	Name        string    `json:"name"`
 	Creator     string    `json:"creator"`     // from annotation, or empty
 	Team        string    `json:"team"`        // from annotation, or empty
 	Composition string    `json:"composition"` // resolved from XR reference/labels, or empty
+	Paused      bool      `json:"paused"`      // crossplane.io/paused annotation
 	Synced      bool      `json:"synced"`
 	Ready       bool      `json:"ready"`
-	Reason      string    `json:"reason"`    // Ready condition reason
-	CreatedAt   time.Time `json:"createdAt"` // metadata.creationTimestamp
-	XRRef       string    `json:"xrRef"`     // spec.resourceRef.name — used for composition enrichment
+	Reason      string    `json:"reason"`              // Ready condition reason
+	CreatedAt   time.Time `json:"createdAt"`           // metadata.creationTimestamp
+	DeletedAt   time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+	XRRef       string    `json:"xrRef"`               // spec.resourceRef.name — used for composition enrichment
 }
 
 // XRInfo holds extracted metadata for a single Crossplane composite resource.
 type XRInfo struct {
 	GVR         string    `json:"gvr"` // "group/version/resource"
 	Group       string    `json:"group"`
+	Version     string    `json:"version"` // API version from the GVR
 	Kind        string    `json:"kind"`
 	Namespace   string    `json:"namespace"` // usually empty for cluster-scoped XRs
 	Name        string    `json:"name"`
 	ClaimName   string    `json:"claimName"`
 	ClaimNS     string    `json:"claimNamespace"`
 	Composition string    `json:"composition"`
+	Paused      bool      `json:"paused"` // crossplane.io/paused annotation
 	Synced      bool      `json:"synced"`
 	Ready       bool      `json:"ready"`
-	Reason      string    `json:"reason"`    // Ready condition reason
-	CreatedAt   time.Time `json:"createdAt"` // metadata.creationTimestamp
+	Reason      string    `json:"reason"`              // Ready condition reason
+	CreatedAt   time.Time `json:"createdAt"`           // metadata.creationTimestamp
+	DeletedAt   time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
 // MRInfo holds extracted metadata for a single Crossplane provider Managed Resource.
 type MRInfo struct {
-	GVR            string    `json:"gvr"`
-	Group          string    `json:"group"`
-	Kind           string    `json:"kind"`
-	Namespace      string    `json:"namespace"`
-	Name           string    `json:"name"`
-	XRName         string    `json:"xrName"`         // crossplane.io/composite label
-	ClaimName      string    `json:"claimName"`      // enriched from XR or MR labels
-	ClaimNS        string    `json:"claimNamespace"` // enriched from XR or MR labels
-	Provider       string    `json:"provider"`       // pkg.crossplane.io/package from MRD discovery
-	ProviderConfig string    `json:"providerConfig"` // spec.providerConfigRef.name
-	Synced         bool      `json:"synced"`
-	Ready          bool      `json:"ready"`
-	Reason         string    `json:"reason"`
-	CreatedAt      time.Time `json:"createdAt"`
+	GVR                string    `json:"gvr"`
+	Group              string    `json:"group"`
+	Version            string    `json:"version"` // API version from the GVR
+	Kind               string    `json:"kind"`
+	Namespace          string    `json:"namespace"`
+	Name               string    `json:"name"`
+	XRName             string    `json:"xrName"`             // crossplane.io/composite label
+	ClaimName          string    `json:"claimName"`          // enriched from XR or MR labels
+	ClaimNS            string    `json:"claimNamespace"`     // enriched from XR or MR labels
+	Provider           string    `json:"provider"`           // pkg.crossplane.io/package from MRD discovery
+	ProviderConfig     string    `json:"providerConfig"`     // spec.providerConfigRef.name
+	ExternalName       string    `json:"externalName"`       // crossplane.io/external-name annotation
+	ManagementPolicies string    `json:"managementPolicies"` // joined spec.managementPolicies
+	Paused             bool      `json:"paused"`             // crossplane.io/paused annotation
+	Synced             bool      `json:"synced"`
+	Ready              bool      `json:"ready"`
+	Reason             string    `json:"reason"`
+	CreatedAt          time.Time `json:"createdAt"`
+	DeletedAt          time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
 // Store is the interface for claim and XR metadata storage.

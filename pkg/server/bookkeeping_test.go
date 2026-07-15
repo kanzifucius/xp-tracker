@@ -59,13 +59,13 @@ func TestBookkeeping_WithData(t *testing.T) {
 	createdAt := time.Now().Add(-1 * time.Hour)
 	s.ReplaceClaims("g/v1/things", []store.ClaimInfo{
 		{
-			GVR: "g/v1/things", Group: "g", Kind: "Thing",
+			GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing",
 			Namespace: "ns1", Name: "claim-a",
 			Creator: "alice", Team: "backend", Composition: "comp-a",
 			Ready: true, Reason: "Available", CreatedAt: createdAt,
 		},
 		{
-			GVR: "g/v1/things", Group: "g", Kind: "Thing",
+			GVR: "g/v1/things", Group: "g", Version: "v1", Kind: "Thing",
 			Namespace: "ns1", Name: "claim-b",
 			Creator: "bob", Team: "frontend", Composition: "comp-b",
 			Ready: false, Reason: "Pending", CreatedAt: createdAt,
@@ -73,7 +73,7 @@ func TestBookkeeping_WithData(t *testing.T) {
 	})
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
 		{
-			GVR: "g/v1/xthings", Group: "g", Kind: "XThing",
+			GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing",
 			Name: "xr-1", Composition: "comp-a",
 			Ready: true, Reason: "Available", CreatedAt: createdAt,
 		},
@@ -116,6 +116,9 @@ func TestBookkeeping_WithData(t *testing.T) {
 	if claimA.Group != "g" {
 		t.Errorf("claim group: got %q, want %q", claimA.Group, "g")
 	}
+	if claimA.Version != "v1" {
+		t.Errorf("claim version: got %q, want %q", claimA.Version, "v1")
+	}
 	if claimA.Kind != "Thing" {
 		t.Errorf("claim kind: got %q, want %q", claimA.Kind, "Thing")
 	}
@@ -130,6 +133,12 @@ func TestBookkeeping_WithData(t *testing.T) {
 	}
 	if claimA.Composition != "comp-a" {
 		t.Errorf("claim composition: got %q, want %q", claimA.Composition, "comp-a")
+	}
+	if claimA.Paused {
+		t.Error("claim paused: expected false")
+	}
+	if claimA.Deleting {
+		t.Error("claim deleting: expected false")
 	}
 	if !claimA.Ready {
 		t.Error("claim ready: expected true")
@@ -148,8 +157,14 @@ func TestBookkeeping_WithData(t *testing.T) {
 	if xr.Name != "xr-1" {
 		t.Errorf("xr name: got %q, want %q", xr.Name, "xr-1")
 	}
+	if xr.Version != "v1" {
+		t.Errorf("xr version: got %q, want %q", xr.Version, "v1")
+	}
 	if xr.Composition != "comp-a" {
 		t.Errorf("xr composition: got %q, want %q", xr.Composition, "comp-a")
+	}
+	if xr.Paused || xr.Deleting {
+		t.Error("xr paused/deleting: expected false")
 	}
 	if !xr.Ready {
 		t.Error("xr ready: expected true")
@@ -189,10 +204,11 @@ func TestBookkeeping_WithMRs(t *testing.T) {
 
 	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []store.MRInfo{
 		{
-			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
 			Namespace: "default", Name: "nop-1", XRName: "xr-1",
 			ClaimName: "widget-a", ClaimNS: "team-alpha",
-			Provider: "provider-nop", ProviderConfig: "default",
+			Provider: "provider-nop", ProviderConfig: "default", ExternalName: "cloud-nop-1",
+			ManagementPolicies: "Observe", Paused: true, DeletedAt: createdAt,
 			Ready: true, Reason: "Available", CreatedAt: createdAt,
 		},
 	})
@@ -213,11 +229,26 @@ func TestBookkeeping_WithMRs(t *testing.T) {
 	if mr.Name != "nop-1" || mr.XRName != "xr-1" {
 		t.Errorf("unexpected MR: %+v", mr)
 	}
+	if mr.Version != "v1alpha1" {
+		t.Errorf("Version: got %q", mr.Version)
+	}
 	if mr.ClaimName != "widget-a" || mr.ClaimNamespace != "team-alpha" {
 		t.Errorf("claim linkage: got %q/%q", mr.ClaimName, mr.ClaimNamespace)
 	}
 	if mr.Provider != "provider-nop" || mr.ProviderConfig != "default" {
 		t.Errorf("provider fields: got %q/%q", mr.Provider, mr.ProviderConfig)
+	}
+	if mr.ExternalName != "cloud-nop-1" {
+		t.Errorf("ExternalName: got %q", mr.ExternalName)
+	}
+	if mr.ManagementPolicies != "Observe" {
+		t.Errorf("ManagementPolicies: got %q", mr.ManagementPolicies)
+	}
+	if !mr.Paused {
+		t.Error("expected Paused=true")
+	}
+	if !mr.Deleting {
+		t.Error("expected Deleting=true")
 	}
 }
 

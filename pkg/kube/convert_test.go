@@ -40,6 +40,7 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 				"annotations": map[string]interface{}{
 					"platform.example.org/creator": "alice",
 					"platform.example.org/team":    "backend",
+					"crossplane.io/paused":         "true",
 				},
 				"labels": map[string]interface{}{
 					"crossplane.io/composition-name": "comp-direct",
@@ -68,6 +69,8 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 
 	// Set the creation timestamp properly via the typed accessor.
 	obj.SetCreationTimestamp(metav1.NewTime(now))
+	deletedAt := now.Add(5 * time.Minute)
+	obj.SetDeletionTimestamp(&metav1.Time{Time: deletedAt})
 
 	claim := UnstructuredToClaim(*obj, gvr, cfg)
 
@@ -76,6 +79,9 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 	}
 	if claim.Group != "platform.example.org" {
 		t.Errorf("Group: got %q", claim.Group)
+	}
+	if claim.Version != "v1alpha1" {
+		t.Errorf("Version: got %q", claim.Version)
 	}
 	if claim.Kind != "PostgreSQLInstance" {
 		t.Errorf("Kind: got %q", claim.Kind)
@@ -107,8 +113,14 @@ func TestUnstructuredToClaim_Full(t *testing.T) {
 	if claim.Reason != "Available" {
 		t.Errorf("Reason: got %q", claim.Reason)
 	}
+	if !claim.Paused {
+		t.Error("expected Paused=true")
+	}
 	if !claim.CreatedAt.Equal(now) {
 		t.Errorf("CreatedAt: got %v, want %v", claim.CreatedAt, now)
+	}
+	if !claim.DeletedAt.Equal(deletedAt) {
+		t.Errorf("DeletedAt: got %v, want %v", claim.DeletedAt, deletedAt)
 	}
 }
 
@@ -180,6 +192,9 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 					"crossplane.io/claim-name":       "dbx-ws-aaip-1-1",
 					"crossplane.io/claim-namespace":  "data-and-ai",
 				},
+				"annotations": map[string]interface{}{
+					"crossplane.io/paused": "TRUE",
+				},
 			},
 			"status": map[string]interface{}{
 				"conditions": []interface{}{
@@ -201,6 +216,9 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 
 	if xr.GVR != "platform.example.org/v1alpha1/xpostgresqlinstances" {
 		t.Errorf("GVR: got %q", xr.GVR)
+	}
+	if xr.Version != "v1alpha1" {
+		t.Errorf("Version: got %q", xr.Version)
 	}
 	if xr.Kind != "XPostgreSQLInstance" {
 		t.Errorf("Kind: got %q", xr.Kind)
@@ -225,6 +243,12 @@ func TestUnstructuredToXR_Full(t *testing.T) {
 	}
 	if xr.Reason != "Unavailable" {
 		t.Errorf("Reason: got %q", xr.Reason)
+	}
+	if !xr.Paused {
+		t.Error("expected Paused=true")
+	}
+	if !xr.DeletedAt.IsZero() {
+		t.Errorf("DeletedAt should be zero, got %v", xr.DeletedAt)
 	}
 }
 
@@ -274,11 +298,16 @@ func TestUnstructuredToMR_Full(t *testing.T) {
 					"crossplane.io/claim-name":      "widget-a",
 					"crossplane.io/claim-namespace": "team-alpha",
 				},
+				"annotations": map[string]interface{}{
+					"crossplane.io/external-name": "cloud-nop-abc",
+					"crossplane.io/paused":        "true",
+				},
 			},
 			"spec": map[string]interface{}{
 				"providerConfigRef": map[string]interface{}{
 					"name": "default",
 				},
+				"managementPolicies": []interface{}{"Observe", "LateInitialize"},
 			},
 			"status": map[string]interface{}{
 				"conditions": []interface{}{
@@ -289,11 +318,16 @@ func TestUnstructuredToMR_Full(t *testing.T) {
 		},
 	}
 	obj.SetCreationTimestamp(metav1.NewTime(now))
+	deletedAt := now.Add(2 * time.Minute)
+	obj.SetDeletionTimestamp(&metav1.Time{Time: deletedAt})
 
 	mr := UnstructuredToMR(*obj, gvr, cfg, "provider-nop")
 
 	if mr.GVR != "nop.crossplane.io/v1alpha1/nopresources" {
 		t.Errorf("GVR: got %q", mr.GVR)
+	}
+	if mr.Version != "v1alpha1" {
+		t.Errorf("Version: got %q", mr.Version)
 	}
 	if mr.Kind != "NopResource" {
 		t.Errorf("Kind: got %q", mr.Kind)
@@ -313,11 +347,23 @@ func TestUnstructuredToMR_Full(t *testing.T) {
 	if mr.ProviderConfig != "default" {
 		t.Errorf("ProviderConfig: got %q", mr.ProviderConfig)
 	}
+	if mr.ExternalName != "cloud-nop-abc" {
+		t.Errorf("ExternalName: got %q", mr.ExternalName)
+	}
+	if mr.ManagementPolicies != "Observe,LateInitialize" {
+		t.Errorf("ManagementPolicies: got %q", mr.ManagementPolicies)
+	}
+	if !mr.Paused {
+		t.Error("expected Paused=true")
+	}
 	if !mr.Ready || !mr.Synced {
 		t.Error("expected Ready and Synced true")
 	}
 	if mr.Reason != "Available" {
 		t.Errorf("Reason: got %q", mr.Reason)
+	}
+	if !mr.DeletedAt.Equal(deletedAt) {
+		t.Errorf("DeletedAt: got %v, want %v", mr.DeletedAt, deletedAt)
 	}
 }
 

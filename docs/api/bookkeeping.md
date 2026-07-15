@@ -1,6 +1,6 @@
 # Bookkeeping Endpoint
 
-In addition to Prometheus metrics, xp-tracker exposes a JSON endpoint that returns the full in-memory snapshot of claims and XRs. This is useful for ad-hoc debugging, CLI tools, or external integrations that don't want to go through PromQL.
+In addition to Prometheus metrics, xp-tracker exposes a JSON endpoint that returns the full in-memory snapshot of claims, XRs, and MRs. This is useful for ad-hoc debugging, CLI tools, or external integrations that don't want to go through PromQL.
 
 ## Endpoint
 
@@ -17,12 +17,15 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
   "claims": [
     {
       "group": "platform.example.org",
+      "version": "v1alpha1",
       "kind": "PostgreSQLInstance",
       "namespace": "team-a",
       "name": "db-123",
       "creator": "alice@example.com",
       "team": "payments",
       "composition": "postgres-small",
+      "paused": false,
+      "deleting": false,
       "ready": true,
       "reason": "Ready",
       "ageSeconds": 12345
@@ -31,10 +34,13 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
   "xrs": [
     {
       "group": "platform.example.org",
+      "version": "v1alpha1",
       "kind": "XPostgreSQLInstance",
       "namespace": "",
       "name": "db-123-xyz",
       "composition": "postgres-small",
+      "paused": false,
+      "deleting": false,
       "ready": true,
       "reason": "Ready",
       "ageSeconds": 12300
@@ -43,6 +49,7 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
   "mrs": [
     {
       "group": "nop.crossplane.io",
+      "version": "v1alpha1",
       "kind": "NopResource",
       "namespace": "default",
       "name": "nop-abc",
@@ -51,6 +58,10 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
       "claimNamespace": "team-alpha",
       "provider": "provider-nop",
       "providerConfig": "default",
+      "externalName": "cloud-nop-abc",
+      "managementPolicies": "*",
+      "paused": false,
+      "deleting": false,
       "ready": true,
       "reason": "Available",
       "ageSeconds": 1200
@@ -67,12 +78,15 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
 | Field | Type | Description |
 |---|---|---|
 | `group` | string | API group from the GVR |
+| `version` | string | API version from the GVR |
 | `kind` | string | Resource kind |
 | `namespace` | string | Kubernetes namespace |
 | `name` | string | Resource name |
 | `creator` | string | Value of the creator annotation (empty if not set) |
 | `team` | string | Value of the team annotation (empty if not set) |
 | `composition` | string | Composition name (enriched from backing XR) |
+| `paused` | boolean | Whether the `crossplane.io/paused` annotation is set |
+| `deleting` | boolean | Whether `metadata.deletionTimestamp` is set |
 | `ready` | boolean | Whether the Ready condition is True |
 | `reason` | string | Ready condition reason |
 | `ageSeconds` | integer | Seconds since `metadata.creationTimestamp` |
@@ -82,10 +96,13 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
 | Field | Type | Description |
 |---|---|---|
 | `group` | string | API group from the GVR |
+| `version` | string | API version from the GVR |
 | `kind` | string | Resource kind |
 | `namespace` | string | Namespace (usually empty for cluster-scoped XRs) |
 | `name` | string | Resource name |
 | `composition` | string | Composition name (from label) |
+| `paused` | boolean | Whether the `crossplane.io/paused` annotation is set |
+| `deleting` | boolean | Whether `metadata.deletionTimestamp` is set |
 | `ready` | boolean | Whether the Ready condition is True |
 | `reason` | string | Ready condition reason |
 | `ageSeconds` | integer | Seconds since `metadata.creationTimestamp` |
@@ -95,6 +112,7 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
 | Field | Type | Description |
 |---|---|---|
 | `group` | string | API group from the GVR |
+| `version` | string | API version from the GVR |
 | `kind` | string | Resource kind |
 | `namespace` | string | Kubernetes namespace |
 | `name` | string | Resource name |
@@ -103,6 +121,10 @@ Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
 | `claimNamespace` | string | Claim namespace |
 | `provider` | string | Provider package name from MRD discovery |
 | `providerConfig` | string | `spec.providerConfigRef.name` |
+| `externalName` | string | Cloud resource identifier from `crossplane.io/external-name` |
+| `managementPolicies` | string | Joined `spec.managementPolicies` |
+| `paused` | boolean | Whether the `crossplane.io/paused` annotation is set |
+| `deleting` | boolean | Whether `metadata.deletionTimestamp` is set |
 | `ready` | boolean | Whether the Ready condition is True |
 | `reason` | string | Ready condition reason |
 | `ageSeconds` | integer | Seconds since `metadata.creationTimestamp` |
@@ -128,12 +150,9 @@ curl -s localhost:8080/bookkeeping | jq '[.claims[] | select(.ready == false)]'
 # Get all XR compositions
 curl -s localhost:8080/bookkeeping | jq '[.xrs[].composition] | unique'
 
-# List MRs for a claim
+# List paused or deleting MRs
+curl -s localhost:8080/bookkeeping | jq '[.mrs[] | select(.paused == true or .deleting == true)]'
+
+# Find MRs for a specific claim
 curl -s localhost:8080/bookkeeping | jq '[.mrs[] | select(.claimName == "widget-a")]'
 ```
-
-## Notes
-
-- The endpoint reflects the **last completed polling cycle** and is eventually consistent.
-- No authentication is required. The endpoint is intended for cluster-internal use. Restrict access via Kubernetes NetworkPolicy if needed.
-- In large clusters the payload may be substantial. Pagination and filtering may be added in future versions.

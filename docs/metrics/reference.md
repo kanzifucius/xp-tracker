@@ -1,6 +1,6 @@
 # Metrics Reference
 
-xp-tracker exposes twelve Prometheus **gauge** metrics for Crossplane resources, plus six **self-monitoring** metrics for operational visibility.
+xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resources, plus six **self-monitoring** metrics for operational visibility.
 
 ## Claim metrics
 
@@ -12,12 +12,16 @@ Total number of Crossplane claims, broken down by label tuple.
 |---|---|
 | `group` | API group from the GVR (e.g. `platform.example.org`) |
 | `kind` | Resource kind (e.g. `PostgresqlInstance`) |
+| `version` | API version from the GVR (e.g. `v1alpha1`) |
 | `namespace` | Kubernetes namespace |
 | `creator` | Value of the `CREATOR_ANNOTATION_KEY` annotation |
 | `team` | Value of the `TEAM_ANNOTATION_KEY` annotation |
 | `claim_name` | Claim metadata name |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |
+| `reason` | Ready condition reason (e.g. `Available`, `Creating`) |
+| `paused` | Whether the `crossplane.io/paused` annotation is set (`true`/`false`) |
+| `deleting` | Whether `metadata.deletionTimestamp` is set (`true`/`false`) |
 
 ### `crossplane_claims_ready`
 
@@ -31,6 +35,14 @@ Per-claim Synced condition status as a gauge (`1` for `true`, `0` for `false`). 
 
 Per-claim Ready condition status as a gauge (`1` for `true`, `0` for `false`). Same label set as `crossplane_claims_total`.
 
+### `crossplane_claims_created_timestamp_seconds`
+
+Unix creation timestamp (`metadata.creationTimestamp`) for each claim. Same label set as `crossplane_claims_total`. Skipped when creation time is unknown.
+
+### `crossplane_claims_deletion_timestamp_seconds`
+
+Unix deletion timestamp (`metadata.deletionTimestamp`) for each claim. Same label set as `crossplane_claims_total`. Emitted only while the claim is being deleted.
+
 ## XR metrics
 
 ### `crossplane_xr_total`
@@ -41,12 +53,16 @@ Total number of Crossplane composite resources (XRs), broken down by label tuple
 |---|---|
 | `group` | API group from the GVR |
 | `kind` | Resource kind (e.g. `XPostgreSQLInstance`) |
+| `version` | API version from the GVR |
 | `namespace` | Kubernetes namespace (usually empty for cluster-scoped XRs) |
 | `name` | XR metadata name |
 | `claim_name` | Claim name linked to the XR (`crossplane.io/claim-name`, or backfilled from the claim's `spec.resourceRef.name`) |
 | `claim_namespace` | Claim namespace linked to the XR (`crossplane.io/claim-namespace`, or backfilled from the matching claim) |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |
+| `reason` | Ready condition reason |
+| `paused` | Whether the `crossplane.io/paused` annotation is set (`true`/`false`) |
+| `deleting` | Whether `metadata.deletionTimestamp` is set (`true`/`false`) |
 
 ### `crossplane_xr_ready`
 
@@ -60,6 +76,14 @@ Per-XR Synced condition status as a gauge (`1` for `true`, `0` for `false`). Sam
 
 Per-XR Ready condition status as a gauge (`1` for `true`, `0` for `false`). Same label set as `crossplane_xr_total`.
 
+### `crossplane_xr_created_timestamp_seconds`
+
+Unix creation timestamp for each XR. Same label set as `crossplane_xr_total`. Skipped when creation time is unknown.
+
+### `crossplane_xr_deletion_timestamp_seconds`
+
+Unix deletion timestamp for each XR. Same label set as `crossplane_xr_total`. Emitted only while the XR is being deleted.
+
 ## MR metrics
 
 ### `crossplane_mr_total`
@@ -70,6 +94,7 @@ Total number of claim-linked provider managed resources (MRs), broken down by la
 |---|---|
 | `group` | API group from the GVR |
 | `kind` | Resource kind (e.g. `NopResource`) |
+| `version` | API version from the GVR |
 | `namespace` | Kubernetes namespace |
 | `name` | MR metadata name |
 | `xr_name` | Composite (XR) name from the composite label |
@@ -77,8 +102,13 @@ Total number of claim-linked provider managed resources (MRs), broken down by la
 | `claim_namespace` | Claim namespace linked to the MR |
 | `provider` | Provider package name from MRD discovery (e.g. `provider-nop`) |
 | `provider_config` | `spec.providerConfigRef.name` |
+| `external_name` | Cloud resource identifier from the `crossplane.io/external-name` annotation (empty until the provider sets it) |
+| `management_policies` | Joined `spec.managementPolicies` (e.g. `Observe`, `*`; empty when unset) |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |
+| `reason` | Ready condition reason |
+| `paused` | Whether the `crossplane.io/paused` annotation is set (`true`/`false`) |
+| `deleting` | Whether `metadata.deletionTimestamp` is set (`true`/`false`) |
 
 ### `crossplane_mr_ready`
 
@@ -92,57 +122,35 @@ Per-MR Synced condition status as a gauge (`1` for `true`, `0` for `false`). Sam
 
 Per-MR Ready condition status as a gauge (`1` for `true`, `0` for `false`). Same label set as `crossplane_mr_total`.
 
-## Example output
+### `crossplane_mr_created_timestamp_seconds`
 
-Output from `curl localhost:8080/metrics` with sample resources applied:
+Unix creation timestamp for each MR. Same label set as `crossplane_mr_total`. Skipped when creation time is unknown.
 
-```prometheus
-# HELP crossplane_claims_ready Number of Ready Crossplane claims by group, kind, namespace, creator, claim_name, and status.
-# TYPE crossplane_claims_ready gauge
-crossplane_claims_ready{claim_name="gadget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",ready="false",synced="true",team="platform"} 0
-crossplane_claims_ready{claim_name="widget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+### `crossplane_mr_deletion_timestamp_seconds`
 
-# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, creator, claim_name, and status.
-# TYPE crossplane_claims_total gauge
-crossplane_claims_total{claim_name="gadget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",ready="false",synced="true",team="platform"} 1
-crossplane_claims_total{claim_name="widget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+Unix deletion timestamp for each MR. Same label set as `crossplane_mr_total`. Emitted only while the MR is being deleted.
 
-# HELP crossplane_claims_status_synced Synced status for Crossplane claims (1=true, 0=false).
-# TYPE crossplane_claims_status_synced gauge
-crossplane_claims_status_synced{claim_name="gadget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",ready="false",synced="true",team="platform"} 1
-crossplane_claims_status_synced{claim_name="widget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+## Example PromQL
 
-# HELP crossplane_claims_status_ready Ready status for Crossplane claims (1=true, 0=false).
-# TYPE crossplane_claims_status_ready gauge
-crossplane_claims_status_ready{claim_name="gadget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Gadget",namespace="team-alpha",ready="false",synced="true",team="platform"} 0
-crossplane_claims_status_ready{claim_name="widget-a",creator="alice@example.com",group="samples.xptracker.dev",kind="Widget",namespace="team-alpha",ready="true",synced="true",team="platform"} 1
+```promql
+# Claims older than 15 minutes and still not ready
+(time() - crossplane_claims_created_timestamp_seconds > 900) and on(group, kind, namespace, claim_name) crossplane_claims_status_ready == 0
 
-# HELP crossplane_xr_ready Number of Ready Crossplane XRs by group, kind, namespace, name, and status.
-# TYPE crossplane_xr_ready gauge
-crossplane_xr_ready{claim_name="widget-a",claim_namespace="team-alpha",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 0
-crossplane_xr_ready{claim_name="widget-b",claim_namespace="team-beta",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
+# Resources stuck deleting for more than 10 minutes
+time() - crossplane_mr_deletion_timestamp_seconds > 600
 
-# HELP crossplane_xr_total Number of Crossplane composite resources (XRs) by group, kind, namespace, name, and status.
-# TYPE crossplane_xr_total gauge
-crossplane_xr_total{claim_name="widget-a",claim_namespace="team-alpha",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 1
-crossplane_xr_total{claim_name="widget-b",claim_namespace="team-beta",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
+# Not-ready resources by Ready condition reason
+sum by (reason) (crossplane_claims_status_ready == 0)
 
-# HELP crossplane_xr_status_synced Synced status for Crossplane XRs (1=true, 0=false).
-# TYPE crossplane_xr_status_synced gauge
-crossplane_xr_status_synced{claim_name="widget-a",claim_namespace="team-alpha",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 1
-crossplane_xr_status_synced{claim_name="widget-b",claim_namespace="team-beta",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
-
-# HELP crossplane_xr_status_ready Ready status for Crossplane XRs (1=true, 0=false).
-# TYPE crossplane_xr_status_ready gauge
-crossplane_xr_status_ready{claim_name="widget-a",claim_namespace="team-alpha",group="samples.xptracker.dev",kind="XGadget",name="xgadget-a",namespace="",ready="false",synced="true"} 0
-crossplane_xr_status_ready{claim_name="widget-b",claim_namespace="team-beta",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
+# Paused MRs that still look ready
+crossplane_mr_status_ready == 1 and on(group, kind, namespace, name) crossplane_mr_total{paused="true"}
 ```
 
 ## Aggregation behaviour
 
-Metrics are aggregated by their full label tuple. Because `claim_name` is included, claims are emitted as per-claim series.
+Metrics are aggregated by their full label tuple. Because resource names are included, series are emitted per resource.
 
-This means cardinality is closely tied to the number of claims, with additional dimensions from status labels.
+This means cardinality is closely tied to the number of claims, XRs, and MRs, with additional dimensions from status labels.
 
 ## Label notes
 
@@ -152,6 +160,8 @@ This means cardinality is closely tied to the number of claims, with additional 
 - **MR scope**: only provider MRs with the composite label are tracked.
 - **Composition enrichment**: composition is still available on the `/bookkeeping` payload, even though it is no longer a Prometheus label dimension.
 - **Namespace for XRs**: composite resources are typically cluster-scoped, so the `namespace` label is usually empty.
+- **Paused**: `paused="true"` when the `crossplane.io/paused` annotation equals `true` (case-insensitive).
+- **Deleting**: `deleting="true"` when `metadata.deletionTimestamp` is set; the matching `*_deletion_timestamp_seconds` gauge is emitted only in that case.
 
 ## Self-monitoring metrics
 

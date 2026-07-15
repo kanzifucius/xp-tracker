@@ -221,32 +221,42 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 
 | Metric | Type | Labels | Description |
 |---|---|---|---|
-| `crossplane_claims_total` | Gauge | `group`, `kind`, `namespace`, `creator`, `team`, `claim_name`, `synced`, `ready` | Total number of claims |
-| `crossplane_claims_ready` | Gauge | `group`, `kind`, `namespace`, `creator`, `team`, `claim_name`, `synced`, `ready` | Number of claims with Ready=True |
-| `crossplane_claims_status_synced` | Gauge | `group`, `kind`, `namespace`, `creator`, `team`, `claim_name`, `synced`, `ready` | Per-claim Synced status (1=true, 0=false) |
-| `crossplane_claims_status_ready` | Gauge | `group`, `kind`, `namespace`, `creator`, `team`, `claim_name`, `synced`, `ready` | Per-claim Ready status (1=true, 0=false) |
-| `crossplane_xr_total` | Gauge | `group`, `kind`, `namespace`, `name`, `claim_name`, `claim_namespace`, `synced`, `ready` | Total number of XRs |
-| `crossplane_xr_ready` | Gauge | `group`, `kind`, `namespace`, `name`, `claim_name`, `claim_namespace`, `synced`, `ready` | Number of XRs with Ready=True |
-| `crossplane_xr_status_synced` | Gauge | `group`, `kind`, `namespace`, `name`, `claim_name`, `claim_namespace`, `synced`, `ready` | Per-XR Synced status (1=true, 0=false) |
-| `crossplane_xr_status_ready` | Gauge | `group`, `kind`, `namespace`, `name`, `claim_name`, `claim_namespace`, `synced`, `ready` | Per-XR Ready status (1=true, 0=false) |
-| `crossplane_mr_total` | Gauge | `group`, `kind`, `namespace`, `name`, `xr_name`, `claim_name`, `claim_namespace`, `provider`, `provider_config`, `synced`, `ready` | Total number of claim-linked MRs |
+| `crossplane_claims_total` | Gauge | `group`, `kind`, `version`, `namespace`, `creator`, `team`, `claim_name`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of claims |
+| `crossplane_claims_ready` | Gauge | same as `crossplane_claims_total` | Number of claims with Ready=True |
+| `crossplane_claims_status_synced` | Gauge | same as `crossplane_claims_total` | Per-claim Synced status (1=true, 0=false) |
+| `crossplane_claims_status_ready` | Gauge | same as `crossplane_claims_total` | Per-claim Ready status (1=true, 0=false) |
+| `crossplane_claims_created_timestamp_seconds` | Gauge | same as `crossplane_claims_total` | Unix creation timestamp |
+| `crossplane_claims_deletion_timestamp_seconds` | Gauge | same as `crossplane_claims_total` | Unix deletion timestamp (while deleting) |
+| `crossplane_xr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `claim_name`, `claim_namespace`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of XRs |
+| `crossplane_xr_ready` | Gauge | same as `crossplane_xr_total` | Number of XRs with Ready=True |
+| `crossplane_xr_status_synced` | Gauge | same as `crossplane_xr_total` | Per-XR Synced status (1=true, 0=false) |
+| `crossplane_xr_status_ready` | Gauge | same as `crossplane_xr_total` | Per-XR Ready status (1=true, 0=false) |
+| `crossplane_xr_created_timestamp_seconds` | Gauge | same as `crossplane_xr_total` | Unix creation timestamp |
+| `crossplane_xr_deletion_timestamp_seconds` | Gauge | same as `crossplane_xr_total` | Unix deletion timestamp (while deleting) |
+| `crossplane_mr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `xr_name`, `claim_name`, `claim_namespace`, `provider`, `provider_config`, `external_name`, `management_policies`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of claim-linked MRs |
 | `crossplane_mr_ready` | Gauge | same as `crossplane_mr_total` | Number of MRs with Ready=True |
 | `crossplane_mr_status_synced` | Gauge | same as `crossplane_mr_total` | Per-MR Synced status (1=true, 0=false) |
 | `crossplane_mr_status_ready` | Gauge | same as `crossplane_mr_total` | Per-MR Ready status (1=true, 0=false) |
+| `crossplane_mr_created_timestamp_seconds` | Gauge | same as `crossplane_mr_total` | Unix creation timestamp |
+| `crossplane_mr_deletion_timestamp_seconds` | Gauge | same as `crossplane_mr_total` | Unix deletion timestamp (while deleting) |
 
 ### Label details
 
 - **group** -- API group from the GVR (e.g. `platform.example.org`)
 - **kind** -- Resource kind (e.g. `PostgresqlInstance`)
+- **version** -- API version from the GVR (e.g. `v1alpha1`)
 - **namespace** -- Kubernetes namespace (empty for cluster-scoped XRs)
 - **creator** -- Value of the annotation specified by `CREATOR_ANNOTATION_KEY` (claims only)
 - **team** -- Value of the annotation specified by `TEAM_ANNOTATION_KEY` (claims only)
-- **claim_name** -- Claim metadata name (claims only)
-- **synced** -- Crossplane `Synced` condition as a label (`true`/`false`, claims only)
-- **ready** -- Crossplane `Ready` condition as a label (`true`/`false`, claims only)
-- **name** -- XR metadata name (XRs only)
-- **claim_name** -- Value of XR label `crossplane.io/claim-name` (XRs only)
-- **claim_namespace** -- Value of XR label `crossplane.io/claim-namespace` (XRs only)
+- **claim_name** -- Claim metadata name (claims); XR/MR claim linkage from labels or enrichment
+- **claim_namespace** -- Claim namespace linked to an XR or MR
+- **name** -- XR or MR metadata name
+- **xr_name** -- Composite name from the composite label (MRs only)
+- **provider** / **provider_config** / **external_name** / **management_policies** -- MR provider attribution and cloud identity
+- **synced** / **ready** -- Crossplane condition statuses as labels (`true`/`false`)
+- **reason** -- Ready condition reason (e.g. `Available`, `Creating`)
+- **paused** -- Whether `crossplane.io/paused` is set (`true`/`false`)
+- **deleting** -- Whether `metadata.deletionTimestamp` is set (`true`/`false`)
 
 ### Example output
 

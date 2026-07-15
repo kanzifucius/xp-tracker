@@ -2,6 +2,7 @@ package kube
 
 import (
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,6 +21,7 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 	claim := store.ClaimInfo{
 		GVR:       GVRString(gvr),
 		Group:     gvr.Group,
+		Version:   gvr.Version,
 		Kind:      obj.GetKind(),
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
@@ -40,6 +42,9 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 	if cfg.TeamAnnotationKey != "" {
 		claim.Team = obj.GetAnnotations()[cfg.TeamAnnotationKey]
 	}
+
+	claim.Paused = isPaused(obj)
+	claim.DeletedAt = deletionTimestamp(obj)
 
 	// Extract spec.resourceRef.name for composition enrichment.
 	claim.XRRef = nestedString(obj.Object, "spec", "resourceRef", "name")
@@ -63,6 +68,7 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	xr := store.XRInfo{
 		GVR:       GVRString(gvr),
 		Group:     gvr.Group,
+		Version:   gvr.Version,
 		Kind:      obj.GetKind(),
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
@@ -81,6 +87,9 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	xr.ClaimName = labels["crossplane.io/claim-name"]
 	xr.ClaimNS = labels["crossplane.io/claim-namespace"]
 
+	xr.Paused = isPaused(obj)
+	xr.DeletedAt = deletionTimestamp(obj)
+
 	// Extract standard Crossplane status conditions.
 	xr.Synced = extractConditionStatus(obj.Object, "Synced")
 	xr.Ready, xr.Reason = extractReadyCondition(obj.Object)
@@ -93,6 +102,7 @@ func UnstructuredToMR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	mr := store.MRInfo{
 		GVR:       GVRString(gvr),
 		Group:     gvr.Group,
+		Version:   gvr.Version,
 		Kind:      obj.GetKind(),
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
@@ -111,12 +121,31 @@ func UnstructuredToMR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	mr.ClaimName = labels["crossplane.io/claim-name"]
 	mr.ClaimNS = labels["crossplane.io/claim-namespace"]
 
+	annotations := obj.GetAnnotations()
+	mr.ExternalName = annotations["crossplane.io/external-name"]
+	mr.Paused = isPaused(obj)
+	mr.DeletedAt = deletionTimestamp(obj)
 	mr.ProviderConfig = nestedString(obj.Object, "spec", "providerConfigRef", "name")
+	mr.ManagementPolicies = nestedStringSliceJoined(obj.Object, "spec", "managementPolicies")
 
 	mr.Synced = extractConditionStatus(obj.Object, "Synced")
 	mr.Ready, mr.Reason = extractReadyCondition(obj.Object)
 
 	return mr
+}
+
+// isPaused reports whether the crossplane.io/paused annotation is set to true.
+func isPaused(obj unstructured.Unstructured) bool {
+	return strings.EqualFold(obj.GetAnnotations()["crossplane.io/paused"], "true")
+}
+
+// deletionTimestamp returns metadata.deletionTimestamp, or zero when not deleting.
+func deletionTimestamp(obj unstructured.Unstructured) time.Time {
+	ts := obj.GetDeletionTimestamp()
+	if ts == nil {
+		return time.Time{}
+	}
+	return ts.Time
 }
 
 // extractReadyCondition finds the "Ready" condition in status.conditions and returns
@@ -174,6 +203,15 @@ func nestedString(obj map[string]interface{}, fields ...string) string {
 		return ""
 	}
 	return val
+}
+
+// nestedStringSliceJoined extracts a nested string slice and joins it with commas.
+func nestedStringSliceJoined(obj map[string]interface{}, fields ...string) string {
+	vals, found, err := unstructured.NestedStringSlice(obj, fields...)
+	if err != nil || !found || len(vals) == 0 {
+		return ""
+	}
+	return strings.Join(vals, ",")
 }
 
 // resourceToKind converts a plural lowercase resource name to a PascalCase kind.

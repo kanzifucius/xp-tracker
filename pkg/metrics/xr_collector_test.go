@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -35,9 +36,9 @@ func TestXRCollector_Empty(t *testing.T) {
 func TestXRCollector_SingleComposition(t *testing.T) {
 	s := store.New()
 	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true},
-		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr3", ClaimName: "claim-c", ClaimNS: "ns-b", Composition: "comp-prod", Synced: false, Ready: false},
+		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr1", ClaimName: "claim-a", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true, Reason: "Available"},
+		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp-prod", Synced: true, Ready: true, Reason: "Available"},
+		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr3", ClaimName: "claim-c", ClaimNS: "ns-b", Composition: "comp-prod", Synced: false, Ready: false, Reason: "Unavailable"},
 	})
 
 	c := NewXRCollector(s)
@@ -74,12 +75,16 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "name", "xr1")
 	assertLabel(t, labels, "group", "g")
 	assertLabel(t, labels, "kind", "XThing")
+	assertLabel(t, labels, "version", "v1")
 	assertLabel(t, labels, "namespace", "")
 	assertLabel(t, labels, "name", "xr1")
 	assertLabel(t, labels, "claim_name", "claim-a")
 	assertLabel(t, labels, "claim_namespace", "ns-a")
 	assertLabel(t, labels, "synced", "true")
 	assertLabel(t, labels, "ready", "true")
+	assertLabel(t, labels, "reason", "Available")
+	assertLabel(t, labels, "paused", "false")
+	assertLabel(t, labels, "deleting", "false")
 }
 
 func TestXRCollector_EnrichedClaimLabels(t *testing.T) {
@@ -136,9 +141,33 @@ func TestXRCollector_Describe(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 4 {
-		t.Fatalf("expected 4 descriptors, got %d", count)
+	if count != 6 {
+		t.Fatalf("expected 6 descriptors, got %d", count)
 	}
+}
+
+func TestXRCollector_Timestamps(t *testing.T) {
+	createdAt := time.Unix(1700000000, 0).UTC()
+	deletedAt := time.Unix(1700007200, 0).UTC()
+
+	s := store.New()
+	s.ReplaceXRs("g/v1/xthings", []store.XRInfo{
+		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr-alive", Synced: true, Ready: true, CreatedAt: createdAt},
+		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr-dying", Synced: false, Ready: false, CreatedAt: createdAt, DeletedAt: deletedAt},
+	})
+
+	c := NewXRCollector(s)
+	families := gatherCollector(t, c)
+
+	createdFam := families["crossplane_xr_created_timestamp_seconds"]
+	if createdFam == nil || len(createdFam.GetMetric()) != 2 {
+		t.Fatalf("expected 2 created timestamp samples, got %v", createdFam)
+	}
+	deletionFam := families["crossplane_xr_deletion_timestamp_seconds"]
+	if deletionFam == nil || len(deletionFam.GetMetric()) != 1 {
+		t.Fatalf("expected 1 deletion timestamp sample, got %v", deletionFam)
+	}
+	assertLabel(t, findLabelsByLabelValue(t, deletionFam.GetMetric(), "name", "xr-dying"), "deleting", "true")
 }
 
 func TestXRCollector_AllReady(t *testing.T) {
