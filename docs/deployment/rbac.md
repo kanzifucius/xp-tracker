@@ -1,6 +1,6 @@
 # RBAC
 
-xp-tracker needs **read-only** access to the Crossplane claim and XR resources it polls.
+xp-tracker needs **read-only** access to the Crossplane claim, XR, and managed-resource resources it polls, plus XRD and MRD discovery resources.
 
 ## Default ClusterRole
 
@@ -33,10 +33,15 @@ rules:
       - kafkatopics
       - xkafkatopics
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiextensions.crossplane.io"]
+    resources:
+      - compositeresourcedefinitions
+      - managedresourcedefinitions
+    verbs: ["get", "list", "watch"]
 ```
 
 !!! tip
-    Include both the claim resources and the XR resources. The exporter needs to read XRs to enrich claims with composition information.
+    Include the discovered XR resources and `compositeresourcedefinitions` for both Crossplane v1 and v2 XRD discovery. Include claim resources only when tracking legacy `LegacyCluster` XRDs, and include managed-resource GVRs plus `managedresourcedefinitions` when tracking MRs.
 
 You can override the ClusterRole via a Kustomize patch in your overlay. The example overlay at `deploy/overlays/example/` includes a scoped ClusterRole patch that demonstrates this pattern:
 

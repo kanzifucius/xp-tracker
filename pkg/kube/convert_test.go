@@ -278,6 +278,40 @@ func TestUnstructuredToXR_NoConditions(t *testing.T) {
 	}
 }
 
+func TestUnstructuredToXR_V2NamespacedCompositionRef(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "platform.example.org", Version: "v1", Resource: "apps"}
+	cfg := &config.Config{
+		CompositionLabelKey: "crossplane.io/composition-name",
+		XRGVRSScopes: map[string]config.ResourceScope{
+			GVRString(gvr): config.ResourceScopeNamespaced,
+		},
+	}
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "platform.example.org/v1",
+		"kind":       "App",
+		"metadata": map[string]interface{}{
+			"name":      "payments",
+			"namespace": "team-a",
+		},
+		"spec": map[string]interface{}{
+			"crossplane": map[string]interface{}{
+				"compositionRef": map[string]interface{}{"name": "app-v2"},
+			},
+		},
+	}}
+
+	xr := UnstructuredToXR(*obj, gvr, cfg)
+	if xr.Namespace != "team-a" {
+		t.Fatalf("expected namespace team-a, got %q", xr.Namespace)
+	}
+	if xr.Composition != "app-v2" {
+		t.Fatalf("expected composition from spec.crossplane.compositionRef, got %q", xr.Composition)
+	}
+	if xr.ClaimSupported {
+		t.Fatal("v2 namespaced XR must not support claims")
+	}
+}
+
 func TestUnstructuredToMR_Full(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "nop.crossplane.io", Version: "v1alpha1", Resource: "nopresources"}
 	cfg := &config.Config{

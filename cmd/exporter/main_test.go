@@ -12,12 +12,6 @@ import (
 	"github.com/kanzifucius/xp-tracker/pkg/config"
 )
 
-var xrdResource = schema.GroupVersionResource{
-	Group:    "apiextensions.crossplane.io",
-	Version:  "v1",
-	Resource: "compositeresourcedefinitions",
-}
-
 func TestDiscoverAndApplyGVRs_NoClaims(t *testing.T) {
 	xrdWithoutClaim := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -41,14 +35,22 @@ func TestDiscoverAndApplyGVRs_NoClaims(t *testing.T) {
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
-			xrdResource: "CompositeResourceDefinitionList",
+			{Group: "apiextensions.crossplane.io", Version: "v1", Resource: "compositeresourcedefinitions"}:      "CompositeResourceDefinitionList",
+			{Group: "apiextensions.crossplane.io", Version: "v2", Resource: "compositeresourcedefinitions"}:      "CompositeResourceDefinitionList",
+			{Group: "apiextensions.crossplane.io", Version: "v1alpha1", Resource: "managedresourcedefinitions"}: "ManagedResourceDefinitionList",
 		},
 		xrdWithoutClaim,
 	)
 
 	cfg := &config.Config{}
 	err := discoverAndApplyGVRs(context.Background(), client, cfg)
-	if err == nil {
-		t.Fatal("expected error when no claim GVRs are discovered")
+	if err != nil {
+		t.Fatalf("discoverAndApplyGVRs error: %v", err)
+	}
+	if len(cfg.ClaimGVRs) != 0 {
+		t.Fatalf("expected no claim GVRs, got %d", len(cfg.ClaimGVRs))
+	}
+	if len(cfg.XRGVRs) != 1 {
+		t.Fatalf("expected one XR GVR, got %d", len(cfg.XRGVRs))
 	}
 }

@@ -4,18 +4,27 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+
+	"github.com/kanzifucius/xp-tracker/pkg/config"
 )
 
 const packageLabelKey = "pkg.crossplane.io/package"
 
-var xrdGVR = schema.GroupVersionResource{
+var xrdV1GVR = schema.GroupVersionResource{
 	Group:    "apiextensions.crossplane.io",
 	Version:  "v1",
+	Resource: "compositeresourcedefinitions",
+}
+
+var xrdV2GVR = schema.GroupVersionResource{
+	Group:    "apiextensions.crossplane.io",
+	Version:  "v2",
 	Resource: "compositeresourcedefinitions",
 }
 
@@ -25,45 +34,52 @@ var mrdGVR = schema.GroupVersionResource{
 	Resource: "managedresourcedefinitions",
 }
 
-// DiscoverFromXRD discovers claim and XR GVRs from Crossplane XRDs.
-func DiscoverFromXRD(ctx context.Context, client dynamic.Interface) ([]schema.GroupVersionResource, []schema.GroupVersionResource, error) {
-	list, err := client.Resource(xrdGVR).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, nil, fmt.Errorf("list compositeresourcedefinitions: %w", err)
-	}
-
+// DiscoverFromXRD discovers claim and XR GVRs from Crossplane v1 and v2 XRDs.
+// The returned scope map is keyed by group/version/resource.
+func DiscoverFromXRD(ctx context.Context, client dynamic.Interface) ([]schema.GroupVersionResource, []schema.GroupVersionResource, map[string]config.ResourceScope, error) {
 	claimSet := map[string]schema.GroupVersionResource{}
 	xrSet := map[string]schema.GroupVersionResource{}
+	xrScopes := map[string]config.ResourceScope{}
 
-	for _, item := range list.Items {
-		xrGVR, claimGVR, hasClaim, err := xrdToGVRs(item)
+	for _, xrdGVR := range []schema.GroupVersionResource{xrdV1GVR, xrdV2GVR} {
+		list, err := client.Resource(xrdGVR).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			name := item.GetName()
-			if name == "" {
-				name = "<unknown>"
-			}
-			return nil, nil, fmt.Errorf("derive GVRs from XRD %q: %w", name, err)
+			return nil, nil, nil, fmt.Errorf("list %s compositeresourcedefinitions: %w", xrdGVR.Version, err)
 		}
 
-		xrSet[gvrKey(xrGVR)] = xrGVR
-		if hasClaim {
-			claimSet[gvrKey(claimGVR)] = claimGVR
+		for _, item := range list.Items {
+			xrGVR, claimGVR, hasClaim, err := xrdToGVRs(item)
+			if err != nil {
+				name := item.GetName()
+				if name == "" {
+					name = "<unknown>"
+				}
+				return nil, nil, nil, fmt.Errorf("derive GVRs from XRD %q: %w", name, err)
+			}
+
+			key := gvrKey(xrGVR)
+			xrSet[key] = xrGVR
+			xrScopes[key] = xrdScope(item, xrdGVR.Version)
+			if hasClaim {
+				claimSet[gvrKey(claimGVR)] = claimGVR
+			}
 		}
 	}
 
-	return mapToSortedSlice(claimSet), mapToSortedSlice(xrSet), nil
+	return mapToSortedSlice(claimSet), mapToSortedSlice(xrSet), xrScopes, nil
 }
 
 // DiscoverMRGVRsFromMRDs discovers provider Managed Resource GVRs from Active
 // Crossplane ManagedResourceDefinitions.
-func DiscoverMRGVRsFromMRDs(ctx context.Context, client dynamic.Interface) ([]schema.GroupVersionResource, map[string]string, error) {
+func DiscoverMRGVRsFromMRDs(ctx context.Context, client dynamic.Interface) ([]schema.GroupVersionResource, map[string]string, map[string]config.ResourceScope, error) {
 	list, err := client.Resource(mrdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, nil, fmt.Errorf("list managedresourcedefinitions: %w", err)
+		return nil, nil, nil, fmt.Errorf("list managedresourcedefinitions: %w", err)
 	}
 
 	gvrSet := map[string]schema.GroupVersionResource{}
 	providerNames := map[string]string{}
+	scopes := map[string]config.ResourceScope{}
 
 	for _, item := range list.Items {
 		if !isActiveMRD(item) {
@@ -76,15 +92,42 @@ func DiscoverMRGVRsFromMRDs(ctx context.Context, client dynamic.Interface) ([]sc
 			if name == "" {
 				name = "<unknown>"
 			}
-			return nil, nil, fmt.Errorf("derive GVR from MRD %q: %w", name, err)
+			return nil, nil, nil, fmt.Errorf("derive GVR from MRD %q: %w", name, err)
 		}
 
 		key := gvrKey(mrGVR)
 		gvrSet[key] = mrGVR
 		providerNames[key] = providerFromMRD(item)
+		scopes[key] = mrdScope(item, mrGVR.Group)
 	}
 
-	return mapToSortedSlice(gvrSet), providerNames, nil
+	return mapToSortedSlice(gvrSet), providerNames, scopes, nil
+}
+
+func xrdScope(xrd unstructured.Unstructured, apiVersion string) config.ResourceScope {
+	if scope, found, _ := unstructured.NestedString(xrd.Object, "spec", "scope"); found {
+		switch config.ResourceScope(scope) {
+		case config.ResourceScopeNamespaced, config.ResourceScopeCluster, config.ResourceScopeLegacyCluster:
+			return config.ResourceScope(scope)
+		}
+	}
+	if apiVersion == "v2" {
+		return config.ResourceScopeNamespaced
+	}
+	return config.ResourceScopeLegacyCluster
+}
+
+func mrdScope(mrd unstructured.Unstructured, group string) config.ResourceScope {
+	if scope, found, _ := unstructured.NestedString(mrd.Object, "spec", "scope"); found {
+		switch config.ResourceScope(scope) {
+		case config.ResourceScopeNamespaced, config.ResourceScopeCluster, config.ResourceScopeLegacyCluster:
+			return config.ResourceScope(scope)
+		}
+	}
+	if strings.Contains(group, ".m.") {
+		return config.ResourceScopeNamespaced
+	}
+	return config.ResourceScopeLegacyCluster
 }
 
 func isActiveMRD(mrd unstructured.Unstructured) bool {

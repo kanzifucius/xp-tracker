@@ -470,3 +470,68 @@ func TestPoller_PollMRs(t *testing.T) {
 		t.Errorf("Provider: got %q", mrs[0].Provider)
 	}
 }
+
+func TestPoller_V2NamespacedResourcesRespectNamespaceScope(t *testing.T) {
+	xrGVR := schema.GroupVersionResource{Group: "platform.example.org", Version: "v1", Resource: "apps"}
+	mrGVR := schema.GroupVersionResource{Group: "nop.m.crossplane.io", Version: "v1beta1", Resource: "nopresources"}
+
+	xrA := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "platform.example.org/v1",
+		"kind":       "App",
+		"metadata": map[string]interface{}{"name": "app", "namespace": "team-a"},
+		"spec": map[string]interface{}{
+			"crossplane": map[string]interface{}{
+				"compositionRef": map[string]interface{}{"name": "app-v2"},
+			},
+		},
+	}}
+	xrB := xrA.DeepCopy()
+	xrB.SetNamespace("team-b")
+	mrA := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "nop.m.crossplane.io/v1beta1",
+		"kind":       "NopResource",
+		"metadata": map[string]interface{}{
+			"name":      "resource",
+			"namespace": "team-a",
+			"labels": map[string]interface{}{
+				"crossplane.io/composite": "app",
+			},
+		},
+	}}
+	mrB := mrA.DeepCopy()
+	mrB.SetNamespace("team-b")
+
+	client := newFakeClient(
+		map[schema.GroupVersionResource]string{
+			xrGVR: "AppList",
+			mrGVR: "NopResourceList",
+		},
+		xrA, xrB, mrA, mrB,
+	)
+	cfg := &config.Config{
+		XRGVRs: []schema.GroupVersionResource{xrGVR},
+		MRGVRs: []schema.GroupVersionResource{mrGVR},
+		Namespaces: []string{"team-a"},
+		XRGVRSScopes: map[string]config.ResourceScope{
+			GVRString(xrGVR): config.ResourceScopeNamespaced,
+		},
+		MRGVRSScopes: map[string]config.ResourceScope{
+			GVRString(mrGVR): config.ResourceScopeNamespaced,
+		},
+		CompositeLabelKey:   "crossplane.io/composite",
+		CompositionLabelKey: "crossplane.io/composition-name",
+		PollIntervalSeconds: 30,
+	}
+
+	s := store.New()
+	NewPoller(client, cfg, s).poll(context.Background())
+
+	xrs := s.SnapshotXRs()
+	if len(xrs) != 1 || xrs[0].Namespace != "team-a" || xrs[0].Composition != "app-v2" {
+		t.Fatalf("expected only the namespaced team-a XR with v2 composition, got %#v", xrs)
+	}
+	mrs := s.SnapshotMRs()
+	if len(mrs) != 1 || mrs[0].Namespace != "team-a" {
+		t.Fatalf("expected only the namespaced team-a MR, got %#v", mrs)
+	}
+}

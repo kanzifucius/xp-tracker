@@ -143,20 +143,18 @@ func formatGVRs(gvrs []schema.GroupVersionResource) []string {
 }
 
 func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *config.Config) error {
-	claimGVRs, xrGVRs, err := kube.DiscoverFromXRD(ctx, client)
+	claimGVRs, xrGVRs, xrScopes, err := kube.DiscoverFromXRD(ctx, client)
 	if err != nil {
 		return fmt.Errorf("discover claim and XR GVRs from XRDs: %w", err)
-	}
-	if len(claimGVRs) == 0 {
-		return fmt.Errorf("no claim GVRs discovered from XRDs; ensure claim-enabled XRDs exist in the cluster")
 	}
 	if len(xrGVRs) == 0 {
 		return fmt.Errorf("no XR GVRs discovered from XRDs; ensure Crossplane XRDs exist in the cluster")
 	}
 	cfg.ClaimGVRs = claimGVRs
 	cfg.XRGVRs = xrGVRs
+	cfg.XRGVRSScopes = xrScopes
 
-	mrGVRs, providerNames, err := kube.DiscoverMRGVRsFromMRDs(ctx, client)
+	mrGVRs, providerNames, mrScopes, err := kube.DiscoverMRGVRsFromMRDs(ctx, client)
 	if err != nil {
 		return fmt.Errorf("discover MR GVRs from managed resource definitions: %w", err)
 	}
@@ -164,8 +162,14 @@ func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *co
 	if cfg.MRProviderNames == nil {
 		cfg.MRProviderNames = make(map[string]string)
 	}
+	if cfg.MRGVRSScopes == nil {
+		cfg.MRGVRSScopes = make(map[string]config.ResourceScope)
+	}
 	for key, name := range providerNames {
 		cfg.MRProviderNames[key] = name
+	}
+	for key, scope := range mrScopes {
+		cfg.MRGVRSScopes[key] = scope
 	}
 
 	// Merge env-configured MR_GVRS (additive, deduplicated).

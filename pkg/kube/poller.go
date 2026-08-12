@@ -26,8 +26,8 @@ import (
 // within the QPS ceiling.
 const mrPollConcurrency = 20
 
-// Poller periodically lists Crossplane claims and XRs from the Kubernetes API
-// and updates the in-memory store.
+// Poller periodically lists Crossplane claims, XRs, and managed resources from
+// the Kubernetes API and updates the in-memory store.
 type Poller struct {
 	client dynamic.Interface
 	cfg    *config.Config
@@ -69,7 +69,7 @@ func (p *Poller) poll(ctx context.Context) {
 
 	var hadErrors bool
 
-	// Poll XRs first so composition data is available for claim enrichment.
+	// Poll XRs first so composition and claim linkage are available for enrichment.
 	for _, gvr := range p.cfg.XRGVRs {
 		if err := p.pollXRs(ctx, gvr); err != nil {
 			hadErrors = true
@@ -91,8 +91,7 @@ func (p *Poller) poll(ctx context.Context) {
 		hadErrors = true
 	}
 
-	// Enrich claims with composition data from XRs, XRs with claim data from claims,
-	// and MRs with claim data from XRs.
+	// Enrich legacy claims from XRs, legacy XRs from claims, and MRs from XRs.
 	p.store.EnrichClaimCompositions()
 	p.store.EnrichXRClaims()
 	p.store.EnrichMRClaims()
@@ -169,11 +168,10 @@ func (p *Poller) pollClaims(ctx context.Context, gvr schema.GroupVersionResource
 func (p *Poller) pollXRs(ctx context.Context, gvr schema.GroupVersionResource) error {
 	gvrStr := GVRString(gvr)
 
-	// XRs are typically cluster-scoped, but respect namespace config if set.
 	namespaces := p.cfg.Namespaces
 	var allXRs []store.XRInfo
 
-	if len(namespaces) == 0 {
+	if !p.isNamespacedXR(gvr) || len(namespaces) == 0 {
 		xrs, err := p.listXRs(ctx, gvr, "")
 		if err != nil {
 			slog.Error("failed to list XRs", "gvr", gvrStr, "error", err)
@@ -241,7 +239,7 @@ func (p *Poller) pollMRs(ctx context.Context, gvr schema.GroupVersionResource) e
 	namespaces := p.cfg.Namespaces
 	var allMRs []store.MRInfo
 
-	if len(namespaces) == 0 {
+	if !p.isNamespacedMR(gvr) || len(namespaces) == 0 {
 		mrs, err := p.listMRs(ctx, gvr, "", provider)
 		if err != nil {
 			slog.Error("failed to list MRs", "gvr", gvrStr, "error", err)
@@ -271,8 +269,7 @@ func (p *Poller) pollMRs(ctx context.Context, gvr schema.GroupVersionResource) e
 	return nil
 }
 
-// listMRs lists MRs for a specific GVR and optional namespace.
-// Only resources with the composite label (claim chain) are returned.
+// listMRs lists XR-linked MRs for a specific GVR and optional namespace.
 func (p *Poller) listMRs(ctx context.Context, gvr schema.GroupVersionResource, namespace, provider string) ([]store.MRInfo, error) {
 	var ri dynamic.ResourceInterface
 	if namespace == "" {
@@ -310,6 +307,14 @@ func (p *Poller) listMRs(ctx context.Context, gvr schema.GroupVersionResource, n
 		}
 	}
 	return mrs, nil
+}
+
+func (p *Poller) isNamespacedXR(gvr schema.GroupVersionResource) bool {
+	return p.cfg.XRGVRSScopes[GVRString(gvr)] == config.ResourceScopeNamespaced
+}
+
+func (p *Poller) isNamespacedMR(gvr schema.GroupVersionResource) bool {
+	return p.cfg.MRGVRSScopes[GVRString(gvr)] == config.ResourceScopeNamespaced
 }
 
 // listClaims lists claims for a specific GVR and optional namespace.
