@@ -29,22 +29,22 @@ type ClaimInfo struct {
 
 // XRInfo holds extracted metadata for a single Crossplane composite resource.
 type XRInfo struct {
-	GVR         string    `json:"gvr"` // "group/version/resource"
-	Group       string    `json:"group"`
-	Version     string    `json:"version"` // API version from the GVR
-	Kind        string    `json:"kind"`
-	Namespace   string    `json:"namespace"` // usually empty for cluster-scoped XRs
-	Name        string    `json:"name"`
-	ClaimName   string    `json:"claimName"`
-	ClaimNS     string    `json:"claimNamespace"`
-	Composition string    `json:"composition"`
-	ClaimSupported bool   `json:"-"` // true for legacy XRs that may be backed by claims
-	Paused      bool      `json:"paused"` // crossplane.io/paused annotation
-	Synced      bool      `json:"synced"`
-	Ready       bool      `json:"ready"`
-	Reason      string    `json:"reason"`              // Ready condition reason
-	CreatedAt   time.Time `json:"createdAt"`           // metadata.creationTimestamp
-	DeletedAt   time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+	GVR               string    `json:"gvr"` // "group/version/resource"
+	Group             string    `json:"group"`
+	Version           string    `json:"version"` // API version from the GVR
+	Kind              string    `json:"kind"`
+	Namespace         string    `json:"namespace"` // usually empty for cluster-scoped XRs
+	Name              string    `json:"name"`
+	ClaimName         string    `json:"claimName"`
+	ClaimNS           string    `json:"claimNamespace"`
+	Composition       string    `json:"composition"`
+	ClaimsUnsupported bool      `json:"-"`      // true for modern XRs that cannot be backed by claims
+	Paused            bool      `json:"paused"` // crossplane.io/paused annotation
+	Synced            bool      `json:"synced"`
+	Ready             bool      `json:"ready"`
+	Reason            string    `json:"reason"`              // Ready condition reason
+	CreatedAt         time.Time `json:"createdAt"`           // metadata.creationTimestamp
+	DeletedAt         time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
 // MRInfo holds extracted metadata for a single Crossplane provider Managed Resource.
@@ -205,7 +205,7 @@ func (s *MemoryStore) EnrichXRClaims() {
 	defer s.mu.Unlock()
 
 	for key, xr := range s.xrs {
-		if !xr.ClaimSupported || xr.ClaimName != "" {
+		if xr.ClaimsUnsupported || xr.ClaimName != "" {
 			continue
 		}
 		for _, claim := range s.claims {
@@ -263,7 +263,8 @@ func (s *MemoryStore) lookupXR(namespace, name string) (XRInfo, bool) {
 	if xr, ok := s.xrs[objectKey(namespace, name)]; ok {
 		return xr, true
 	}
-	return s.xrs[name]
+	xr, ok := s.xrs[name]
+	return xr, ok
 }
 
 // SnapshotClaims returns a copy of all stored claims.

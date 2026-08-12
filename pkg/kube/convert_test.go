@@ -307,7 +307,7 @@ func TestUnstructuredToXR_V2NamespacedCompositionRef(t *testing.T) {
 	if xr.Composition != "app-v2" {
 		t.Fatalf("expected composition from spec.crossplane.compositionRef, got %q", xr.Composition)
 	}
-	if xr.ClaimSupported {
+	if !xr.ClaimsUnsupported {
 		t.Fatal("v2 namespaced XR must not support claims")
 	}
 }

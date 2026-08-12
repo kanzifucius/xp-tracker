@@ -35,8 +35,8 @@ func TestDiscoverAndApplyGVRs_NoClaims(t *testing.T) {
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
-			{Group: "apiextensions.crossplane.io", Version: "v1", Resource: "compositeresourcedefinitions"}:      "CompositeResourceDefinitionList",
-			{Group: "apiextensions.crossplane.io", Version: "v2", Resource: "compositeresourcedefinitions"}:      "CompositeResourceDefinitionList",
+			{Group: "apiextensions.crossplane.io", Version: "v1", Resource: "compositeresourcedefinitions"}:     "CompositeResourceDefinitionList",
+			{Group: "apiextensions.crossplane.io", Version: "v2", Resource: "compositeresourcedefinitions"}:     "CompositeResourceDefinitionList",
 			{Group: "apiextensions.crossplane.io", Version: "v1alpha1", Resource: "managedresourcedefinitions"}: "ManagedResourceDefinitionList",
 		},
 		xrdWithoutClaim,

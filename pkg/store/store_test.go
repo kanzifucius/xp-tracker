@@ -161,9 +161,9 @@ func TestEnrichXRClaims(t *testing.T) {
 	s := New()
 
 	s.ReplaceXRs("g1/v1/xpostgres", []XRInfo{
-		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-abc", ClaimSupported: true},
-		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-def", ClaimName: "label-claim", ClaimNS: "label-ns", ClaimSupported: true},
-		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-orphan", ClaimSupported: true},
+		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-abc"},
+		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-def", ClaimName: "label-claim", ClaimNS: "label-ns"},
+		{GVR: "g1/v1/xpostgres", Group: "g1", Kind: "XPostgreSQL", Name: "xr-orphan"},
 	})
 
 	s.ReplaceClaims("g1/v1/postgres", []ClaimInfo{

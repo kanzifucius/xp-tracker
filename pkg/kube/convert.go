@@ -66,14 +66,14 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 // UnstructuredToXR converts an unstructured Kubernetes object to an XRInfo.
 func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionResource, cfg *config.Config) store.XRInfo {
 	xr := store.XRInfo{
-		GVR:       GVRString(gvr),
-		Group:     gvr.Group,
-		Version:   gvr.Version,
-		Kind:      obj.GetKind(),
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-		CreatedAt: obj.GetCreationTimestamp().Time,
-		ClaimSupported: xrSupportsClaims(cfg, gvr),
+		GVR:               GVRString(gvr),
+		Group:             gvr.Group,
+		Version:           gvr.Version,
+		Kind:              obj.GetKind(),
+		Namespace:         obj.GetNamespace(),
+		Name:              obj.GetName(),
+		CreatedAt:         obj.GetCreationTimestamp().Time,
+		ClaimsUnsupported: !xrSupportsClaims(cfg, gvr),
 	}
 
 	if xr.Kind == "" {

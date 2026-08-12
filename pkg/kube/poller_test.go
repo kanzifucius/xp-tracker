@@ -478,7 +478,7 @@ func TestPoller_V2NamespacedResourcesRespectNamespaceScope(t *testing.T) {
 	xrA := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "platform.example.org/v1",
 		"kind":       "App",
-		"metadata": map[string]interface{}{"name": "app", "namespace": "team-a"},
+		"metadata":   map[string]interface{}{"name": "app", "namespace": "team-a"},
 		"spec": map[string]interface{}{
 			"crossplane": map[string]interface{}{
 				"compositionRef": map[string]interface{}{"name": "app-v2"},
@@ -509,8 +509,8 @@ func TestPoller_V2NamespacedResourcesRespectNamespaceScope(t *testing.T) {
 		xrA, xrB, mrA, mrB,
 	)
 	cfg := &config.Config{
-		XRGVRs: []schema.GroupVersionResource{xrGVR},
-		MRGVRs: []schema.GroupVersionResource{mrGVR},
+		XRGVRs:     []schema.GroupVersionResource{xrGVR},
+		MRGVRs:     []schema.GroupVersionResource{mrGVR},
 		Namespaces: []string{"team-a"},
 		XRGVRSScopes: map[string]config.ResourceScope{
 			GVRString(xrGVR): config.ResourceScopeNamespaced,
