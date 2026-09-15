@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Crossplane-2.0+-7C3AED?style=flat" alt="Crossplane">
 </p>
 
-A minimal, read-only Prometheus exporter for Crossplane claims, composite resources (XRs), and claim-linked provider managed resources (MRs). It polls the Kubernetes API via the dynamic client, aggregates resource counts by meaningful labels, and exposes them on `/metrics`.
+A minimal, read-only Prometheus exporter for Crossplane legacy claims, composite resources (XRs), and XR-linked provider managed resources (MRs). It supports both legacy Crossplane v1 claim workflows and Crossplane v2 namespaced resources, polls the Kubernetes API via the dynamic client, aggregates resource counts by meaningful labels, and exposes them on `/metrics`.
 
 ## Why xp-tracker?
 
@@ -170,7 +170,7 @@ The snapshot is a single JSON file at `s3://<bucket>/<prefix>/snapshot.json`, ov
 
 ## Configuration
 
-xp-tracker discovers claim and XR GVRs from Crossplane `CompositeResourceDefinition` objects and provider MR GVRs from Active `ManagedResourceDefinition` objects at startup.
+xp-tracker discovers XR GVRs from Crossplane v1 and v2 `CompositeResourceDefinition` objects, derives legacy claim GVRs where `claimNames` is present, and discovers provider MR GVRs from Active `ManagedResourceDefinition` objects at startup.
 Environment variables are still used for namespace filtering, annotation/label keys, polling cadence, server address, and optional static GVR overrides.
 
 | Variable | Required | Default | Description |
@@ -193,14 +193,14 @@ Environment variables are still used for namespace filtering, annotation/label k
 
 ### XRD discovery
 
-At startup, xp-tracker lists XRDs (`apiextensions.crossplane.io/v1`, `compositeresourcedefinitions`) and derives:
+At startup, xp-tracker lists XRDs from `apiextensions.crossplane.io/v1` and `apiextensions.crossplane.io/v2` and derives:
 
 1. XR GVR from `spec.group` + selected `spec.versions[].name` + `spec.names.plural`
-2. Claim GVR from `spec.group` + selected `spec.versions[].name` + `spec.claimNames.plural` (when present)
+2. Claim GVR from `spec.group` + selected `spec.versions[].name` + `spec.claimNames.plural` (when present on legacy XRDs)
 
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
 
-If no claim or XR GVRs can be discovered from XRDs, startup fails with a clear error.
+If no XR GVRs can be discovered from XRDs, startup fails with a clear error. Claims are optional because native Crossplane v2 XRDs do not support them.
 
 ### Provider MR discovery
 

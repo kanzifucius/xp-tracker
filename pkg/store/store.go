@@ -1,4 +1,4 @@
-// Package store provides thread-safe in-memory storage for Crossplane claim and XR metadata.
+// Package store provides thread-safe in-memory storage for Crossplane resource metadata.
 package store
 
 import (
@@ -29,21 +29,22 @@ type ClaimInfo struct {
 
 // XRInfo holds extracted metadata for a single Crossplane composite resource.
 type XRInfo struct {
-	GVR         string    `json:"gvr"` // "group/version/resource"
-	Group       string    `json:"group"`
-	Version     string    `json:"version"` // API version from the GVR
-	Kind        string    `json:"kind"`
-	Namespace   string    `json:"namespace"` // usually empty for cluster-scoped XRs
-	Name        string    `json:"name"`
-	ClaimName   string    `json:"claimName"`
-	ClaimNS     string    `json:"claimNamespace"`
-	Composition string    `json:"composition"`
-	Paused      bool      `json:"paused"` // crossplane.io/paused annotation
-	Synced      bool      `json:"synced"`
-	Ready       bool      `json:"ready"`
-	Reason      string    `json:"reason"`              // Ready condition reason
-	CreatedAt   time.Time `json:"createdAt"`           // metadata.creationTimestamp
-	DeletedAt   time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+	GVR               string    `json:"gvr"` // "group/version/resource"
+	Group             string    `json:"group"`
+	Version           string    `json:"version"` // API version from the GVR
+	Kind              string    `json:"kind"`
+	Namespace         string    `json:"namespace"` // usually empty for cluster-scoped XRs
+	Name              string    `json:"name"`
+	ClaimName         string    `json:"claimName"`
+	ClaimNS           string    `json:"claimNamespace"`
+	Composition       string    `json:"composition"`
+	ClaimsUnsupported bool      `json:"-"`      // true for modern XRs that cannot be backed by claims
+	Paused            bool      `json:"paused"` // crossplane.io/paused annotation
+	Synced            bool      `json:"synced"`
+	Ready             bool      `json:"ready"`
+	Reason            string    `json:"reason"`              // Ready condition reason
+	CreatedAt         time.Time `json:"createdAt"`           // metadata.creationTimestamp
+	DeletedAt         time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
 // MRInfo holds extracted metadata for a single Crossplane provider Managed Resource.
@@ -69,7 +70,7 @@ type MRInfo struct {
 	DeletedAt          time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
-// Store is the interface for claim and XR metadata storage.
+// Store is the interface for Crossplane resource metadata storage.
 // Implementations must be safe for concurrent use.
 type Store interface {
 	ReplaceClaims(gvr string, items []ClaimInfo)
@@ -110,7 +111,7 @@ type Snapshot struct {
 type MemoryStore struct {
 	mu     sync.RWMutex
 	claims map[string]ClaimInfo // keyed by "namespace/name"
-	xrs    map[string]XRInfo    // keyed by "namespace/name" (or just "name" for cluster-scoped)
+	xrs    map[string]XRInfo    // keyed by "namespace/name", or "name" when cluster-scoped
 	mrs    map[string]MRInfo    // keyed by "namespace/name"
 }
 
@@ -194,21 +195,21 @@ func (s *MemoryStore) ReplaceMRs(gvr string, items []MRInfo) {
 	}
 }
 
-// EnrichXRClaims looks up each XR without claim labels in the claim store and
-// copies ClaimName and ClaimNS from the claim whose spec.resourceRef.name
-// matches the XR name. Label-derived values are not overwritten. Must be
-// called after both claims and XRs have been replaced for the current polling
-// cycle. If multiple claims reference the same XR, the first match wins.
+// EnrichXRClaims looks up each legacy XR without claim labels in the claim
+// store and copies ClaimName and ClaimNS from the claim whose
+// spec.resourceRef.name matches. Namespaced XRs only match claims in their own
+// namespace; cluster-scoped XRs retain the legacy cross-namespace behaviour.
+// Label-derived values are not overwritten.
 func (s *MemoryStore) EnrichXRClaims() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for key, xr := range s.xrs {
-		if xr.ClaimName != "" {
+		if xr.ClaimsUnsupported || xr.ClaimName != "" {
 			continue
 		}
 		for _, claim := range s.claims {
-			if claim.XRRef == xr.Name {
+			if claim.XRRef == xr.Name && (xr.Namespace == "" || xr.Namespace == claim.Namespace) {
 				xr.ClaimName = claim.Name
 				xr.ClaimNS = claim.Namespace
 				s.xrs[key] = xr
@@ -219,8 +220,8 @@ func (s *MemoryStore) EnrichXRClaims() {
 }
 
 // EnrichClaimCompositions looks up each claim's XRRef in the XR store and
-// copies the Composition value. Must be called after both claims and XRs
-// have been replaced for the current polling cycle.
+// copies the Composition value. It prefers an XR in the claim's namespace,
+// then falls back to a cluster-scoped XR for legacy claims.
 func (s *MemoryStore) EnrichClaimCompositions() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -229,17 +230,16 @@ func (s *MemoryStore) EnrichClaimCompositions() {
 		if claim.XRRef == "" {
 			continue
 		}
-		// XRs are cluster-scoped, so look up by name only.
-		if xr, ok := s.xrs[claim.XRRef]; ok {
+		if xr, ok := s.lookupXR(claim.Namespace, claim.XRRef); ok {
 			claim.Composition = xr.Composition
 			s.claims[key] = claim
 		}
 	}
 }
 
-// EnrichMRClaims copies claim linkage onto MRs from the backing XR store when
-// claim fields are not already set from MR labels. Must be called after
-// claims, XRs, and MRs have been replaced for the current polling cycle.
+// EnrichMRClaims copies legacy claim linkage onto MRs from the backing XR when
+// claim fields are not already set from MR labels. It prefers an XR in the
+// MR's namespace, then falls back to a cluster-scoped XR.
 func (s *MemoryStore) EnrichMRClaims() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -251,12 +251,20 @@ func (s *MemoryStore) EnrichMRClaims() {
 		if mr.XRName == "" {
 			continue
 		}
-		if xr, ok := s.xrs[mr.XRName]; ok {
+		if xr, ok := s.lookupXR(mr.Namespace, mr.XRName); ok {
 			mr.ClaimName = xr.ClaimName
 			mr.ClaimNS = xr.ClaimNS
 			s.mrs[key] = mr
 		}
 	}
+}
+
+func (s *MemoryStore) lookupXR(namespace, name string) (XRInfo, bool) {
+	if xr, ok := s.xrs[objectKey(namespace, name)]; ok {
+		return xr, true
+	}
+	xr, ok := s.xrs[name]
+	return xr, ok
 }
 
 // SnapshotClaims returns a copy of all stored claims.

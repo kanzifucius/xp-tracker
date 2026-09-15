@@ -6,7 +6,7 @@ xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resource
 
 ### `crossplane_claims_total`
 
-Total number of Crossplane claims, broken down by label tuple.
+Total number of legacy Crossplane claims, broken down by label tuple. Crossplane v2 namespaced and modern cluster-scoped XRs do not create claim metrics because they do not support claims.
 
 | Label | Description |
 |---|---|
@@ -54,10 +54,10 @@ Total number of Crossplane composite resources (XRs), broken down by label tuple
 | `group` | API group from the GVR |
 | `kind` | Resource kind (e.g. `XPostgreSQLInstance`) |
 | `version` | API version from the GVR |
-| `namespace` | Kubernetes namespace (usually empty for cluster-scoped XRs) |
+| `namespace` | Kubernetes namespace; populated for Crossplane v2 namespaced XRs |
 | `name` | XR metadata name |
-| `claim_name` | Claim name linked to the XR (`crossplane.io/claim-name`, or backfilled from the claim's `spec.resourceRef.name`) |
-| `claim_namespace` | Claim namespace linked to the XR (`crossplane.io/claim-namespace`, or backfilled from the matching claim) |
+| `claim_name` | Claim name linked to a legacy XR; empty for native v2 XRs |
+| `claim_namespace` | Claim namespace linked to a legacy XR; empty for native v2 XRs |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
 | `ready` | Crossplane `Ready` condition status (`true`/`false`) |
 | `reason` | Ready condition reason |
@@ -88,7 +88,7 @@ Unix deletion timestamp for each XR. Same label set as `crossplane_xr_total`. Em
 
 ### `crossplane_mr_total`
 
-Total number of claim-linked provider managed resources (MRs), broken down by label tuple.
+Total number of XR-linked provider managed resources (MRs), broken down by label tuple.
 
 | Label | Description |
 |---|---|
@@ -98,8 +98,8 @@ Total number of claim-linked provider managed resources (MRs), broken down by la
 | `namespace` | Kubernetes namespace |
 | `name` | MR metadata name |
 | `xr_name` | Composite (XR) name from the composite label |
-| `claim_name` | Claim name linked to the MR (from MR labels or XR enrichment) |
-| `claim_namespace` | Claim namespace linked to the MR |
+| `claim_name` | Claim name linked to the MR (from MR labels or legacy XR enrichment); empty for native v2 resources |
+| `claim_namespace` | Claim namespace linked to the MR; empty for native v2 resources |
 | `provider` | Provider package name from MRD discovery (e.g. `provider-nop`) |
 | `provider_config` | `spec.providerConfigRef.name` |
 | `external_name` | Cloud resource identifier from the `crossplane.io/external-name` annotation (empty until the provider sets it) |
@@ -155,11 +155,11 @@ This means cardinality is closely tied to the number of claims, XRs, and MRs, wi
 ## Label notes
 
 - **Empty labels**: if an annotation key is not configured or the annotation is not present on a resource, the label value is an empty string (`""`).
-- **XR claim linkage**: `claim_name` and `claim_namespace` on XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name.
-- **MR claim linkage**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker looks up the XR named by `xr_name` and copies the XR's claim linkage.
+- **XR claim linkage**: `claim_name` and `claim_namespace` on legacy XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name. Native v2 XRs leave both labels empty.
+- **MR claim linkage**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker looks up the XR named by `xr_name` in the MR's namespace, then falls back to a cluster-scoped XR.
 - **MR scope**: only provider MRs with the composite label are tracked.
 - **Composition enrichment**: composition is still available on the `/bookkeeping` payload, even though it is no longer a Prometheus label dimension.
-- **Namespace for XRs**: composite resources are typically cluster-scoped, so the `namespace` label is usually empty.
+- **Namespace for XRs**: native Crossplane v2 composite resources are namespaced by default; legacy XRs are cluster-scoped and have an empty `namespace` label.
 - **Paused**: `paused="true"` when the `crossplane.io/paused` annotation equals `true` (case-insensitive).
 - **Deleting**: `deleting="true"` when `metadata.deletionTimestamp` is set; the matching `*_deletion_timestamp_seconds` gauge is emitted only in that case.
 

@@ -11,6 +11,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// ResourceScope describes whether a Kubernetes resource is namespace-scoped or
+// cluster-scoped.
+type ResourceScope string
+
+const (
+	// ResourceScopeNamespaced identifies resources that exist in Kubernetes namespaces.
+	ResourceScopeNamespaced ResourceScope = "Namespaced"
+	// ResourceScopeCluster identifies resources that exist at cluster scope.
+	ResourceScopeCluster ResourceScope = "Cluster"
+	// ResourceScopeLegacyCluster identifies v1-compatible cluster-scoped resources.
+	ResourceScopeLegacyCluster ResourceScope = "LegacyCluster"
+)
+
 // Config holds all runtime configuration for the exporter.
 type Config struct {
 	// ClaimGVRs is the list of claim GroupVersionResources to poll.
@@ -19,8 +32,14 @@ type Config struct {
 	// XRGVRs is the list of composite resource GroupVersionResources to poll.
 	XRGVRs []schema.GroupVersionResource
 
+	// XRGVRSScopes maps XR GVR keys to their Crossplane resource scope.
+	XRGVRSScopes map[string]ResourceScope
+
 	// MRGVRs is the list of provider Managed Resource GroupVersionResources to poll.
 	MRGVRs []schema.GroupVersionResource
+
+	// MRGVRSScopes maps MR GVR keys to their Kubernetes resource scope.
+	MRGVRSScopes map[string]ResourceScope
 
 	// MRProviderNames maps GVR key (group/version/resource) to provider package name.
 	MRProviderNames map[string]string
@@ -81,6 +100,8 @@ func Load() (*Config, error) {
 		PollIntervalSeconds: defaultPollInterval,
 		MetricsAddr:         defaultMetricsAddr,
 		MRProviderNames:     make(map[string]string),
+		XRGVRSScopes:        make(map[string]ResourceScope),
+		MRGVRSScopes:        make(map[string]ResourceScope),
 	}
 
 	// Optional: CLAIM_GVRS (deprecated in favour of XRD discovery)

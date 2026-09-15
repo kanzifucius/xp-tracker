@@ -9,6 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+
+	"github.com/kanzifucius/xp-tracker/pkg/config"
 )
 
 func TestDiscoverFromXRD(t *testing.T) {
@@ -56,12 +58,13 @@ func TestDiscoverFromXRD(t *testing.T) {
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
-			xrdGVR: "CompositeResourceDefinitionList",
+			xrdV1GVR: "CompositeResourceDefinitionList",
+			xrdV2GVR: "CompositeResourceDefinitionList",
 		},
 		xrdWithClaim, xrdWithoutClaim,
 	)
 
-	claims, xrs, err := DiscoverFromXRD(context.Background(), client)
+	claims, xrs, scopes, err := DiscoverFromXRD(context.Background(), client)
 	if err != nil {
 		t.Fatalf("DiscoverFromXRD error: %v", err)
 	}
@@ -74,6 +77,9 @@ func TestDiscoverFromXRD(t *testing.T) {
 	}
 	if len(xrs) != 2 {
 		t.Fatalf("expected 2 XR GVRs, got %d", len(xrs))
+	}
+	if scopes[gvrKey(xrs[0])] != config.ResourceScopeLegacyCluster {
+		t.Fatalf("expected v1 XRD scope LegacyCluster, got %q", scopes[gvrKey(xrs[0])])
 	}
 }
 
@@ -100,12 +106,13 @@ func TestDiscoverFromXRD_ErrorsOnInvalidXRD(t *testing.T) {
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
-			xrdGVR: "CompositeResourceDefinitionList",
+			xrdV1GVR: "CompositeResourceDefinitionList",
+			xrdV2GVR: "CompositeResourceDefinitionList",
 		},
 		invalid,
 	)
 
-	_, _, err := DiscoverFromXRD(context.Background(), client)
+	_, _, _, err := DiscoverFromXRD(context.Background(), client)
 	if err == nil {
 		t.Fatal("expected discovery error for XRD without referenceable/served versions")
 	}
@@ -152,7 +159,7 @@ func TestDiscoverMRGVRsFromMRDs_ActiveWithPackageLabel(t *testing.T) {
 		active, inactive,
 	)
 
-	gvrs, providers, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
+	gvrs, providers, scopes, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
 	if err != nil {
 		t.Fatalf("DiscoverMRGVRsFromMRDs error: %v", err)
 	}
@@ -165,6 +172,9 @@ func TestDiscoverMRGVRsFromMRDs_ActiveWithPackageLabel(t *testing.T) {
 	key := gvrKey(gvrs[0])
 	if providers[key] != "provider-nop" {
 		t.Fatalf("expected provider-nop, got %q", providers[key])
+	}
+	if scopes[key] != config.ResourceScopeLegacyCluster {
+		t.Fatalf("expected LegacyCluster scope, got %q", scopes[key])
 	}
 }
 
@@ -186,7 +196,7 @@ func TestDiscoverMRGVRsFromMRDs_ProviderFromOwnerRef(t *testing.T) {
 		mrd,
 	)
 
-	_, providers, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
+	_, providers, _, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
 	if err != nil {
 		t.Fatalf("DiscoverMRGVRsFromMRDs error: %v", err)
 	}
@@ -208,7 +218,7 @@ func TestDiscoverMRGVRsFromMRDs_EmptyWhenNoActiveMRDs(t *testing.T) {
 		inactive,
 	)
 
-	gvrs, providers, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
+	gvrs, providers, _, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
 	if err != nil {
 		t.Fatalf("DiscoverMRGVRsFromMRDs error: %v", err)
 	}
@@ -217,5 +227,44 @@ func TestDiscoverMRGVRsFromMRDs_EmptyWhenNoActiveMRDs(t *testing.T) {
 	}
 	if len(providers) != 0 {
 		t.Fatalf("expected 0 provider mappings, got %d", len(providers))
+	}
+}
+
+func TestDiscoverFromXRD_V2Namespaced(t *testing.T) {
+	xrd := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apiextensions.crossplane.io/v2",
+		"kind":       "CompositeResourceDefinition",
+		"metadata":   map[string]interface{}{"name": "apps.example.org"},
+		"spec": map[string]interface{}{
+			"group": "example.org",
+			"names": map[string]interface{}{"plural": "apps"},
+			"scope": "Namespaced",
+			"versions": []interface{}{
+				map[string]interface{}{"name": "v1", "served": true, "referenceable": true},
+			},
+		},
+	}}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			xrdV1GVR: "CompositeResourceDefinitionList",
+			xrdV2GVR: "CompositeResourceDefinitionList",
+		},
+		xrd,
+	)
+
+	claims, xrs, scopes, err := DiscoverFromXRD(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverFromXRD error: %v", err)
+	}
+	if len(claims) != 0 {
+		t.Fatalf("expected no claim GVRs, got %d", len(claims))
+	}
+	if len(xrs) != 1 {
+		t.Fatalf("expected one XR GVR, got %d", len(xrs))
+	}
+	if scopes[gvrKey(xrs[0])] != config.ResourceScopeNamespaced {
+		t.Fatalf("expected Namespaced scope, got %q", scopes[gvrKey(xrs[0])])
 	}
 }

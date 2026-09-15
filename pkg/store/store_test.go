@@ -198,6 +198,27 @@ func TestEnrichXRClaims(t *testing.T) {
 	}
 }
 
+func TestEnrichMRClaims_PrefersNamespacedXR(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Namespace: "team-a", Name: "widget", ClaimName: "claim-a", ClaimNS: "team-a"},
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Namespace: "team-b", Name: "widget", ClaimName: "claim-b", ClaimNS: "team-b"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "team-b", Name: "resource", XRName: "widget"},
+	})
+
+	s.EnrichMRClaims()
+
+	mrs := s.SnapshotMRs()
+	if len(mrs) != 1 {
+		t.Fatalf("expected one MR, got %d", len(mrs))
+	}
+	if mrs[0].ClaimName != "claim-b" || mrs[0].ClaimNS != "team-b" {
+		t.Fatalf("expected team-b XR linkage, got %q/%q", mrs[0].ClaimName, mrs[0].ClaimNS)
+	}
+}
+
 func TestReplaceMRs(t *testing.T) {
 	s := New()
 	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{

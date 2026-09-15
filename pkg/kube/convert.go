@@ -66,13 +66,14 @@ func UnstructuredToClaim(obj unstructured.Unstructured, gvr schema.GroupVersionR
 // UnstructuredToXR converts an unstructured Kubernetes object to an XRInfo.
 func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionResource, cfg *config.Config) store.XRInfo {
 	xr := store.XRInfo{
-		GVR:       GVRString(gvr),
-		Group:     gvr.Group,
-		Version:   gvr.Version,
-		Kind:      obj.GetKind(),
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-		CreatedAt: obj.GetCreationTimestamp().Time,
+		GVR:               GVRString(gvr),
+		Group:             gvr.Group,
+		Version:           gvr.Version,
+		Kind:              obj.GetKind(),
+		Namespace:         obj.GetNamespace(),
+		Name:              obj.GetName(),
+		CreatedAt:         obj.GetCreationTimestamp().Time,
+		ClaimsUnsupported: !xrSupportsClaims(cfg, gvr),
 	}
 
 	if xr.Kind == "" {
@@ -83,6 +84,9 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	labels := obj.GetLabels()
 	if cfg.CompositionLabelKey != "" {
 		xr.Composition = labels[cfg.CompositionLabelKey]
+	}
+	if xr.Composition == "" {
+		xr.Composition = nestedString(obj.Object, "spec", "crossplane", "compositionRef", "name")
 	}
 	xr.ClaimName = labels["crossplane.io/claim-name"]
 	xr.ClaimNS = labels["crossplane.io/claim-namespace"]
@@ -212,6 +216,11 @@ func nestedStringSliceJoined(obj map[string]interface{}, fields ...string) strin
 		return ""
 	}
 	return strings.Join(vals, ",")
+}
+
+func xrSupportsClaims(cfg *config.Config, gvr schema.GroupVersionResource) bool {
+	scope, known := cfg.XRGVRSScopes[GVRString(gvr)]
+	return !known || scope == config.ResourceScopeLegacyCluster
 }
 
 // resourceToKind converts a plural lowercase resource name to a PascalCase kind.
