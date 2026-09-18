@@ -44,9 +44,6 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 **Dynamic, zero-codegen**
 :   Works with any Crossplane CRD without code generation or recompilation. Just configure your GVRs as environment variables and deploy.
 
-**JSON bookkeeping endpoint**
-:   Beyond Prometheus, the `/bookkeeping` endpoint returns a full snapshot of all tracked resources as JSON. Useful for CLI tooling, external integrations, audit trails, or any consumer that doesn't want to go through PromQL.
-
 ### Standard Crossplane metrics vs xp-tracker
 
 | Dimension | Crossplane built-in | xp-tracker |
@@ -58,7 +55,6 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 | Claim count by team | -- | :material-check: |
 | Readiness ratio by composition | -- | :material-check: |
 | XR count by kind / composition | -- | :material-check: |
-| JSON resource inventory | -- | :material-check: |
 
 !!! tip "In short"
     Crossplane tells you how the *controller* is doing. xp-tracker tells you what *resources* exist, who owns them, and whether they're healthy -- the information platform teams need to run an internal developer platform.
@@ -87,7 +83,6 @@ graph TD
     C -->|SnapshotClaims / SnapshotXRs| D[Claim & XR Collectors<br/><small>pkg/metrics</small>]
     D --> E[HTTP Server<br/><small>pkg/server</small>]
     E -->|GET /metrics| F[Prometheus]
-    E -->|GET /bookkeeping| G[JSON consumers<br/><small>CLI tools, dashboards</small>]
     F --> H[Grafana]
 
     style A fill:#326CE5,color:#fff,stroke:#326CE5
@@ -102,7 +97,6 @@ graph TD
 - :material-chart-bar: **Claim metrics** -- total and ready counts broken down by group, kind, namespace, composition, creator, and team.
 - :material-chart-donut: **XR metrics** -- total and ready counts broken down by group, kind, namespace, and composition.
 - :material-link-variant: **Composition enrichment** -- claims are enriched with their composition name by following `spec.resourceRef` to the backing XR.
-- :material-code-json: **Bookkeeping endpoint** -- JSON snapshot of all tracked resources at `GET /bookkeeping` for debugging and integrations.
 - :material-swap-horizontal: **Pluggable store** -- the in-memory data layer is behind a `store.Store` interface. An S3-backed persistent store is included for surviving restarts.
 - :material-feather: **Lightweight** -- single binary, ~10 MB distroless container image, minimal resource footprint.
 - :material-chip: **Multi-arch** -- container images built for `linux/amd64` and `linux/arm64`.
@@ -135,11 +129,11 @@ graph TD
 
     Kustomize base and overlays
 
-- :material-code-json: **[Bookkeeping API](api/bookkeeping.md)**
+- :material-heart-pulse: **[Health Endpoints](api/health.md)**
 
     ---
 
-    JSON endpoint for debugging and integrations
+    Liveness and readiness probes for Kubernetes
 
 - :material-chart-line: **[Grafana Queries](metrics/grafana-queries.md)**
 

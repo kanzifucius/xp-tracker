@@ -158,7 +158,7 @@ This means cardinality is closely tied to the number of claims, XRs, and MRs, wi
 - **XR claim linkage**: `claim_name` and `claim_namespace` on legacy XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name. Native v2 XRs leave both labels empty.
 - **MR claim linkage**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker looks up the XR named by `xr_name` in the MR's namespace, then falls back to a cluster-scoped XR.
 - **MR scope**: only provider MRs with the composite label are tracked.
-- **Composition enrichment**: composition is still available on the `/bookkeeping` payload, even though it is no longer a Prometheus label dimension.
+- **Composition**: composition is resolved internally for enrichment but is not exposed as a Prometheus label dimension.
 - **Namespace for XRs**: native Crossplane v2 composite resources are namespaced by default; legacy XRs are cluster-scoped and have an empty `namespace` label.
 - **Paused**: `paused="true"` when the `crossplane.io/paused` annotation equals `true` (case-insensitive).
 - **Deleting**: `deleting="true"` when `metadata.deletionTimestamp` is set; the matching `*_deletion_timestamp_seconds` gauge is emitted only in that case.

@@ -163,7 +163,6 @@ dev: kindplane-up samples-apply ## Bootstrap full dev environment (cluster + sam
 	@echo ""
 	@echo "Grafana: http://localhost:30300 (admin/admin)"
 	@echo "Metrics: curl localhost:8080/metrics"
-	@echo "Bookkeeping: curl localhost:8080/bookkeeping"
 
 dev-down: samples-delete kindplane-down ## Tear down full dev environment
 

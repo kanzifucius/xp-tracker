@@ -80,14 +80,6 @@ You should see output like:
 crossplane_claims_total{composition="db-small",creator="alice@example.com",group="myorg.io",kind="Database",namespace="team-a",team="platform"} 3
 ```
 
-## 4. Check bookkeeping
-
-The JSON bookkeeping endpoint provides a full snapshot of all tracked resources:
-
-```bash
-curl -s localhost:8080/bookkeeping | jq .
-```
-
 ## Next steps
 
 - [Configure environment variables](../configuration/environment-variables.md) to tune polling, namespaces, and annotation keys

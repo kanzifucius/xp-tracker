@@ -31,7 +31,6 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 - **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which compositions are most adopted?" -- all via standard PromQL queries and Grafana dashboards.
 - **Chargeback and showback** -- The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
 - **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs and provider MR GVRs from Active ManagedResourceDefinitions at startup.
-- **JSON bookkeeping endpoint** -- Beyond Prometheus, the `/bookkeeping` endpoint returns a full snapshot of all tracked resources as JSON. Useful for CLI tooling, external integrations, audit trails, or any consumer that doesn't want to go through PromQL.
 
 ### Standard Crossplane metrics vs xp-tracker
 
@@ -45,7 +44,6 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 | Readiness ratio by composition | -- | Yes |
 | XR count by kind / composition | -- | Yes |
 | MR count by provider / claim | -- | Yes |
-| JSON resource inventory | -- | Yes |
 
 > **In short:** Crossplane tells you how the *controller* is doing. xp-tracker tells you what *resources* exist, who owns them, and whether they're healthy -- the information platform teams need to run an internal developer platform.
 
@@ -98,7 +96,6 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
                        +--------v-----------+
                        |  HTTP Server       |
                        |  GET /metrics      |  :8080 (configurable)
-                       |  GET /bookkeeping  |
                        |  GET /healthz      |
                        |  GET /readyz       |
                        |  (pkg/server)      |
@@ -292,79 +289,6 @@ crossplane_xr_status_synced{claim_name="widget-a",claim_namespace="team-alpha",g
 # TYPE crossplane_xr_status_ready gauge
 crossplane_xr_status_ready{claim_name="widget-b",claim_namespace="team-beta",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
 ```
-
-## Bookkeeping JSON Endpoint
-
-In addition to Prometheus metrics, the exporter exposes a JSON endpoint that returns the full in-memory snapshot of claims and XRs. This is useful for ad-hoc debugging, CLI tools, or external integrations that don't want to go through PromQL.
-
-### Endpoint
-
-```
-GET /bookkeeping
-```
-
-Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
-
-### Response format
-
-```json
-{
-  "claims": [
-    {
-      "group": "platform.example.org",
-      "kind": "PostgreSQLInstance",
-      "namespace": "team-a",
-      "name": "db-123",
-      "creator": "alice@example.com",
-      "team": "payments",
-      "composition": "postgres-small",
-      "ready": true,
-      "reason": "Ready",
-      "ageSeconds": 12345
-    }
-  ],
-  "xrs": [
-    {
-      "group": "platform.example.org",
-      "kind": "XPostgreSQLInstance",
-      "namespace": "",
-      "name": "db-123-xyz",
-      "composition": "postgres-small",
-      "ready": true,
-      "reason": "Ready",
-      "ageSeconds": 12300
-    }
-  ],
-  "generatedAt": "2026-02-13T20:50:00Z"
-}
-```
-
-### Fields
-
-- **ageSeconds** -- seconds since `metadata.creationTimestamp`, computed at response time.
-- **generatedAt** -- ISO 8601 / RFC 3339 UTC timestamp of when the response was rendered.
-
-### Usage examples
-
-```bash
-# Full snapshot
-curl -s localhost:8080/bookkeeping | jq .
-
-# Count claims by namespace
-curl -s localhost:8080/bookkeeping | jq '[.claims[] | .namespace] | group_by(.) | map({(.[0]): length}) | add'
-
-# List not-ready claims
-curl -s localhost:8080/bookkeeping | jq '[.claims[] | select(.ready == false)]'
-
-# Get all XR compositions
-curl -s localhost:8080/bookkeeping | jq '[.xrs[].composition] | unique'
-```
-
-### Notes
-
-- The endpoint reflects the **last completed polling cycle** and is eventually consistent.
-- No authentication is required; the endpoint is intended for cluster-internal use. Restrict access via Kubernetes NetworkPolicy if needed.
-- In large clusters the payload may be substantial. Pagination/filtering may be added in future versions.
 
 ## Health Endpoints
 
@@ -670,9 +594,6 @@ make run
 # In another terminal -- check metrics
 curl -s localhost:8080/metrics | grep crossplane_
 
-# Check bookkeeping
-curl -s localhost:8080/bookkeeping | jq .
-
 # Clean up
 make samples-delete
 kindplane down
@@ -714,8 +635,7 @@ make run
 │   │   ├── xr_collector.go          # XRCollector (Describe/Collect)
 │   │   └── self.go                  # Self-monitoring metrics (xp_tracker_* prefix)
 │   ├── server/
-│   │   ├── server.go                # HTTP server with custom Prometheus registry
-│   │   └── bookkeeping.go           # JSON bookkeeping endpoint (/bookkeeping)
+│   │   └── server.go                # HTTP server with custom Prometheus registry
 │   └── store/
 │       ├── store.go                 # Store interface + MemoryStore implementation
 │       └── s3store.go               # S3Store persistent backend (decorator over MemoryStore)
