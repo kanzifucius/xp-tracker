@@ -35,9 +35,6 @@
     # In another terminal -- check metrics
     curl -s localhost:8080/metrics | grep crossplane_
 
-    # Check bookkeeping
-    curl -s localhost:8080/bookkeeping | jq .
-
     # Clean up
     make samples-delete
     kindplane down

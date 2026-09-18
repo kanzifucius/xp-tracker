@@ -12,7 +12,7 @@ hide:
   <img src="https://img.shields.io/badge/Crossplane-2.0+-7C3AED?style=flat" alt="Crossplane">
 </p>
 
-A minimal, read-only Prometheus exporter for [Crossplane](https://www.crossplane.io/) claims and composite resources (XRs).
+A minimal, read-only Prometheus exporter for [Crossplane](https://www.crossplane.io/) claims, composite resources (XRs), and XR-linked provider managed resources (MRs).
 
 It polls the Kubernetes API via the dynamic client, aggregates resource counts by meaningful labels, and exposes them as Prometheus gauge metrics on `/metrics`.
 
@@ -25,27 +25,24 @@ Crossplane ships with controller-level Prometheus metrics out of the box -- reco
 - *How many claims exist per namespace?*
 - *Who created them?*
 - *Which team owns them?*
-- *Which compositions are most popular?*
+- *Which resources are stuck, paused, or not ready, and why?*
 - *Is adoption growing over time?*
 
-Standard Crossplane metrics have no concept of **creator**, **team**, **composition breakdown**, or **per-namespace inventory counts**. That is the gap xp-tracker fills.
+Standard Crossplane metrics have no concept of **creator**, **team**, **per-resource health**, or **per-namespace inventory counts**. That is the gap xp-tracker fills.
 
 ### What xp-tracker adds
 
 **Business-level dimensions**
-:   Every metric is broken down by `creator`, `team`, `namespace`, and `composition`. These are the dimensions that matter when you're running a platform, not just an operator.
+:   Every metric is broken down by `creator`, `team`, and `namespace`, plus per-resource status labels (`ready`, `reason`, `paused`, `deleting`). These are the dimensions that matter when you're running a platform, not just an operator.
 
 **Inventory and adoption tracking**
-:   Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which compositions are most adopted?" -- all via standard PromQL queries and Grafana dashboards.
+:   Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which resources are not ready, and for what reason?" -- all via standard PromQL queries and Grafana dashboards.
 
 **Chargeback and showback**
 :   The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
 
 **Dynamic, zero-codegen**
 :   Works with any Crossplane CRD without code generation or recompilation. Just configure your GVRs as environment variables and deploy.
-
-**JSON bookkeeping endpoint**
-:   Beyond Prometheus, the `/bookkeeping` endpoint returns a full snapshot of all tracked resources as JSON. Useful for CLI tooling, external integrations, audit trails, or any consumer that doesn't want to go through PromQL.
 
 ### Standard Crossplane metrics vs xp-tracker
 
@@ -56,9 +53,10 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 | Claim count by namespace | -- | :material-check: |
 | Claim count by creator | -- | :material-check: |
 | Claim count by team | -- | :material-check: |
-| Readiness ratio by composition | -- | :material-check: |
-| XR count by kind / composition | -- | :material-check: |
-| JSON resource inventory | -- | :material-check: |
+| Readiness ratio by namespace / team | -- | :material-check: |
+| XR count by kind / claim linkage | -- | :material-check: |
+| MR count by provider / claim | -- | :material-check: |
+| Stuck or not-ready resources by reason | -- | :material-check: |
 
 !!! tip "In short"
     Crossplane tells you how the *controller* is doing. xp-tracker tells you what *resources* exist, who owns them, and whether they're healthy -- the information platform teams need to run an internal developer platform.
@@ -83,11 +81,10 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
 ```mermaid
 graph TD
     A[Kubernetes API] -->|List / Watch| B[Poller<br/><small>pkg/kube</small>]
-    B -->|ReplaceClaims / ReplaceXRs<br/>EnrichClaimCompositions| C[In-Memory Store<br/><small>pkg/store</small>]
-    C -->|SnapshotClaims / SnapshotXRs| D[Claim & XR Collectors<br/><small>pkg/metrics</small>]
+    B -->|ReplaceClaims / ReplaceXRs / ReplaceMRs<br/>Enrich claim linkage| C[In-Memory Store<br/><small>pkg/store</small>]
+    C -->|SnapshotClaims / SnapshotXRs / SnapshotMRs| D[Claim, XR & MR Collectors<br/><small>pkg/metrics</small>]
     D --> E[HTTP Server<br/><small>pkg/server</small>]
     E -->|GET /metrics| F[Prometheus]
-    E -->|GET /bookkeeping| G[JSON consumers<br/><small>CLI tools, dashboards</small>]
     F --> H[Grafana]
 
     style A fill:#326CE5,color:#fff,stroke:#326CE5
@@ -98,11 +95,11 @@ graph TD
 ## Key features
 
 - :material-shield-lock-outline: **Read-only** -- only `get`, `list`, and `watch` operations against the Kubernetes API. Never creates, updates, or deletes resources.
-- :material-auto-fix: **Dynamic client** -- works with any Crossplane CRD without code generation. Configure GVRs via environment variables.
-- :material-chart-bar: **Claim metrics** -- total and ready counts broken down by group, kind, namespace, composition, creator, and team.
-- :material-chart-donut: **XR metrics** -- total and ready counts broken down by group, kind, namespace, and composition.
-- :material-link-variant: **Composition enrichment** -- claims are enriched with their composition name by following `spec.resourceRef` to the backing XR.
-- :material-code-json: **Bookkeeping endpoint** -- JSON snapshot of all tracked resources at `GET /bookkeeping` for debugging and integrations.
+- :material-auto-fix: **Dynamic client** -- works with any Crossplane CRD without code generation. Claim, XR, and MR GVRs are discovered from XRDs and ManagedResourceDefinitions at startup.
+- :material-chart-bar: **Claim metrics** -- total, ready, status, and timestamp gauges broken down by group, kind, version, namespace, creator, team, claim name, and status labels.
+- :material-chart-donut: **XR metrics** -- total, ready, status, and timestamp gauges broken down by group, kind, version, namespace, name, linked claim, and status labels.
+- :material-cube-outline: **MR metrics** -- total, ready, status, and timestamp gauges for XR-linked provider managed resources, broken down by provider, provider config, external name, management policies, linked XR/claim, and status labels.
+- :material-link-variant: **Claim linkage enrichment** -- legacy XRs and MRs are enriched with `claim_name` / `claim_namespace` by following `spec.resourceRef` and the composite label when Crossplane labels are missing.
 - :material-swap-horizontal: **Pluggable store** -- the in-memory data layer is behind a `store.Store` interface. An S3-backed persistent store is included for surviving restarts.
 - :material-feather: **Lightweight** -- single binary, ~10 MB distroless container image, minimal resource footprint.
 - :material-chip: **Multi-arch** -- container images built for `linux/amd64` and `linux/arm64`.
@@ -127,7 +124,7 @@ graph TD
 
     ---
 
-    The four Prometheus gauges and their labels
+    Every Prometheus gauge and its labels
 
 - :material-kubernetes: **[Deployment](deployment/kustomize.md)**
 
@@ -135,11 +132,11 @@ graph TD
 
     Kustomize base and overlays
 
-- :material-code-json: **[Bookkeeping API](api/bookkeeping.md)**
+- :material-heart-pulse: **[Health Endpoints](api/health.md)**
 
     ---
 
-    JSON endpoint for debugging and integrations
+    Liveness and readiness probes for Kubernetes
 
 - :material-chart-line: **[Grafana Queries](metrics/grafana-queries.md)**
 

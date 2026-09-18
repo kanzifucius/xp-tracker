@@ -20,18 +20,17 @@ Crossplane ships with controller-level Prometheus metrics out of the box -- reco
 - *How many claims exist per namespace?*
 - *Who created them?*
 - *Which team owns them?*
-- *Which compositions are most popular?*
+- *Which resources are stuck, paused, or not ready, and why?*
 - *Is adoption growing over time?*
 
-Standard Crossplane metrics have no concept of **creator**, **team**, **composition breakdown**, or **per-namespace inventory counts**. That is the gap xp-tracker fills.
+Standard Crossplane metrics have no concept of **creator**, **team**, **per-resource health**, or **per-namespace inventory counts**. That is the gap xp-tracker fills.
 
 ### What xp-tracker adds
 
-- **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, `namespace`, and `composition`. These are the dimensions that matter when you're running a platform, not just an operator.
-- **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which compositions are most adopted?" -- all via standard PromQL queries and Grafana dashboards.
+- **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, and `namespace`, plus per-resource status labels (`ready`, `reason`, `paused`, `deleting`). These are the dimensions that matter when you're running a platform, not just an operator.
+- **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which resources are not ready, and for what reason?" -- all via standard PromQL queries and Grafana dashboards.
 - **Chargeback and showback** -- The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
 - **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs and provider MR GVRs from Active ManagedResourceDefinitions at startup.
-- **JSON bookkeeping endpoint** -- Beyond Prometheus, the `/bookkeeping` endpoint returns a full snapshot of all tracked resources as JSON. Useful for CLI tooling, external integrations, audit trails, or any consumer that doesn't want to go through PromQL.
 
 ### Standard Crossplane metrics vs xp-tracker
 
@@ -42,10 +41,10 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 | Claim count by namespace | -- | Yes |
 | Claim count by creator | -- | Yes |
 | Claim count by team | -- | Yes |
-| Readiness ratio by composition | -- | Yes |
-| XR count by kind / composition | -- | Yes |
+| Readiness ratio by namespace / team | -- | Yes |
+| XR count by kind / claim linkage | -- | Yes |
 | MR count by provider / claim | -- | Yes |
-| JSON resource inventory | -- | Yes |
+| Stuck or not-ready resources by reason | -- | Yes |
 
 > **In short:** Crossplane tells you how the *controller* is doing. xp-tracker tells you what *resources* exist, who owns them, and whether they're healthy -- the information platform teams need to run an internal developer platform.
 
@@ -98,7 +97,6 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
                        +--------v-----------+
                        |  HTTP Server       |
                        |  GET /metrics      |  :8080 (configurable)
-                       |  GET /bookkeeping  |
                        |  GET /healthz      |
                        |  GET /readyz       |
                        |  (pkg/server)      |
@@ -292,79 +290,6 @@ crossplane_xr_status_synced{claim_name="widget-a",claim_namespace="team-alpha",g
 # TYPE crossplane_xr_status_ready gauge
 crossplane_xr_status_ready{claim_name="widget-b",claim_namespace="team-beta",group="samples.xptracker.dev",kind="XWidget",name="xwidget-a",namespace="",ready="true",synced="true"} 1
 ```
-
-## Bookkeeping JSON Endpoint
-
-In addition to Prometheus metrics, the exporter exposes a JSON endpoint that returns the full in-memory snapshot of claims and XRs. This is useful for ad-hoc debugging, CLI tools, or external integrations that don't want to go through PromQL.
-
-### Endpoint
-
-```
-GET /bookkeeping
-```
-
-Returns `Content-Type: application/json; charset=utf-8` with HTTP 200.
-
-### Response format
-
-```json
-{
-  "claims": [
-    {
-      "group": "platform.example.org",
-      "kind": "PostgreSQLInstance",
-      "namespace": "team-a",
-      "name": "db-123",
-      "creator": "alice@example.com",
-      "team": "payments",
-      "composition": "postgres-small",
-      "ready": true,
-      "reason": "Ready",
-      "ageSeconds": 12345
-    }
-  ],
-  "xrs": [
-    {
-      "group": "platform.example.org",
-      "kind": "XPostgreSQLInstance",
-      "namespace": "",
-      "name": "db-123-xyz",
-      "composition": "postgres-small",
-      "ready": true,
-      "reason": "Ready",
-      "ageSeconds": 12300
-    }
-  ],
-  "generatedAt": "2026-02-13T20:50:00Z"
-}
-```
-
-### Fields
-
-- **ageSeconds** -- seconds since `metadata.creationTimestamp`, computed at response time.
-- **generatedAt** -- ISO 8601 / RFC 3339 UTC timestamp of when the response was rendered.
-
-### Usage examples
-
-```bash
-# Full snapshot
-curl -s localhost:8080/bookkeeping | jq .
-
-# Count claims by namespace
-curl -s localhost:8080/bookkeeping | jq '[.claims[] | .namespace] | group_by(.) | map({(.[0]): length}) | add'
-
-# List not-ready claims
-curl -s localhost:8080/bookkeeping | jq '[.claims[] | select(.ready == false)]'
-
-# Get all XR compositions
-curl -s localhost:8080/bookkeeping | jq '[.xrs[].composition] | unique'
-```
-
-### Notes
-
-- The endpoint reflects the **last completed polling cycle** and is eventually consistent.
-- No authentication is required; the endpoint is intended for cluster-internal use. Restrict access via Kubernetes NetworkPolicy if needed.
-- In large clusters the payload may be substantial. Pagination/filtering may be added in future versions.
 
 ## Health Endpoints
 
@@ -670,9 +595,6 @@ make run
 # In another terminal -- check metrics
 curl -s localhost:8080/metrics | grep crossplane_
 
-# Check bookkeeping
-curl -s localhost:8080/bookkeeping | jq .
-
 # Clean up
 make samples-delete
 kindplane down
@@ -707,15 +629,16 @@ make run
 │   ├── config/                      # Environment variable parsing and validation
 │   ├── kube/
 │   │   ├── client.go                # Dynamic client factory (in-cluster + kubeconfig fallback)
-│   │   ├── convert.go               # Unstructured -> ClaimInfo/XRInfo conversion
-│   │   └── poller.go                # Ticker-based polling loop with composition enrichment
+│   │   ├── convert.go               # Unstructured -> ClaimInfo/XRInfo/MRInfo conversion
+│   │   ├── discovery.go             # GVR discovery from XRDs and ManagedResourceDefinitions
+│   │   └── poller.go                # Ticker-based polling loop with claim linkage enrichment
 │   ├── metrics/
 │   │   ├── claim_collector.go       # ClaimCollector (Describe/Collect)
 │   │   ├── xr_collector.go          # XRCollector (Describe/Collect)
+│   │   ├── mr_collector.go          # MRCollector (Describe/Collect)
 │   │   └── self.go                  # Self-monitoring metrics (xp_tracker_* prefix)
 │   ├── server/
-│   │   ├── server.go                # HTTP server with custom Prometheus registry
-│   │   └── bookkeeping.go           # JSON bookkeeping endpoint (/bookkeeping)
+│   │   └── server.go                # HTTP server with custom Prometheus registry
 │   └── store/
 │       ├── store.go                 # Store interface + MemoryStore implementation
 │       └── s3store.go               # S3Store persistent backend (decorator over MemoryStore)
@@ -763,10 +686,11 @@ make run
 
 - The exporter does a full replace on each polling cycle. Deleted resources will disappear from metrics after the next poll (default: 30 seconds).
 
-### Composition label is empty
+### `claim_name` / `claim_namespace` labels are empty
 
-- The exporter reads the composition from the `COMPOSITION_LABEL_KEY` label on XRs (default: `crossplane.io/composition-name`). If your XRs don't have this label, set `COMPOSITION_LABEL_KEY` to the correct label key.
-- Claims get their composition via `spec.resourceRef.name` -> XR lookup. If the claim has no `spec.resourceRef`, the composition will be empty until the XR is created and linked.
+- On legacy XRs, the exporter reads `crossplane.io/claim-name` and `crossplane.io/claim-namespace` labels. If they are missing, it backfills them from the claim whose `spec.resourceRef.name` matches the XR name; the labels stay empty until the claim has been bound to its XR.
+- On MRs, the exporter reads the same claim labels, then falls back to the XR named by the `COMPOSITE_LABEL_KEY` label (default: `crossplane.io/composite`). MRs without that label are not tracked at all.
+- Native Crossplane v2 XRs have no claims, so these labels are always empty for them. See [Environment Variables](docs/configuration/environment-variables.md) for the full enrichment rules.
 
 ### Self-monitoring metrics
 

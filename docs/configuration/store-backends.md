@@ -1,20 +1,25 @@
 # Store Backends
 
-xp-tracker uses a pluggable store interface for holding claim and XR metadata in memory. By default, data lives only in memory and is lost on restart. For workloads that restart frequently, an S3 persistent backend is available.
+xp-tracker uses a pluggable store interface for holding claim, XR, and MR metadata in memory. By default, data lives only in memory and is lost on restart. For workloads that restart frequently, an S3 persistent backend is available.
 
 ## Store interface
 
-The `store.Store` interface defines 7 methods:
+The `store.Store` interface groups replace, enrich, snapshot, and count operations for claims, XRs, and MRs:
 
 ```go
 type Store interface {
     ReplaceClaims(gvr string, items []ClaimInfo)
     ReplaceXRs(gvr string, items []XRInfo)
+    ReplaceMRs(gvr string, items []MRInfo)
     EnrichClaimCompositions()
+    EnrichXRClaims()
+    EnrichMRClaims()
     SnapshotClaims() []ClaimInfo
     SnapshotXRs() []XRInfo
+    SnapshotMRs() []MRInfo
     ClaimCount() int
     XRCount() int
+    MRCount() int
 }
 ```
 
@@ -73,12 +78,13 @@ Path-style addressing is automatically enabled when a custom endpoint is set.
 
 ### Snapshot format
 
-The snapshot is a single JSON file containing all claims and XRs:
+The snapshot is a single JSON file containing all claims, XRs, and MRs:
 
 ```json
 {
   "claims": [...],
   "xrs": [...],
+  "mrs": [...],
   "persistedAt": "2026-02-15T10:00:00Z"
 }
 ```

@@ -5,8 +5,8 @@
 This repository is a **single Go product**: `xp-tracker`, a read-only Prometheus
 exporter for Crossplane that exposes business-level inventory metrics (resource
 counts by `creator`, `team`, `namespace`, `composition`). The entrypoint is
-`cmd/exporter`; the binary serves `:8080` with `/metrics`, `/bookkeeping`,
-`/healthz`, and `/readyz`.
+`cmd/exporter`; the binary serves `:8080` with `/metrics`, `/healthz`, and
+`/readyz`.
 
 ### Toolchain
 
@@ -56,7 +56,7 @@ here**. Reproduce an equivalent local cluster manually instead:
    samples:
    `KUBECONFIG=/tmp/kubeconfig CREATOR_ANNOTATION_KEY=xptracker.dev/created-by TEAM_ANNOTATION_KEY=xptracker.dev/team POLL_INTERVAL_SECONDS=10 ./bin/xp-tracker`
    Then `curl localhost:8080/metrics` (series prefixed `crossplane_` and
-   `xp_tracker_store_`) and `curl localhost:8080/bookkeeping` (JSON snapshot).
+   `xp_tracker_store_`).
 
 GVRs are auto-discovered; `CLAIM_GVRS`/`XR_GVRS` env vars are deprecated static
 overrides. All configuration is via environment variables — see
