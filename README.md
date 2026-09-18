@@ -20,15 +20,15 @@ Crossplane ships with controller-level Prometheus metrics out of the box -- reco
 - *How many claims exist per namespace?*
 - *Who created them?*
 - *Which team owns them?*
-- *Which compositions are most popular?*
+- *Which resources are stuck, paused, or not ready, and why?*
 - *Is adoption growing over time?*
 
-Standard Crossplane metrics have no concept of **creator**, **team**, **composition breakdown**, or **per-namespace inventory counts**. That is the gap xp-tracker fills.
+Standard Crossplane metrics have no concept of **creator**, **team**, **per-resource health**, or **per-namespace inventory counts**. That is the gap xp-tracker fills.
 
 ### What xp-tracker adds
 
-- **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, `namespace`, and `composition`. These are the dimensions that matter when you're running a platform, not just an operator.
-- **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which compositions are most adopted?" -- all via standard PromQL queries and Grafana dashboards.
+- **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, and `namespace`, plus per-resource status labels (`ready`, `reason`, `paused`, `deleting`). These are the dimensions that matter when you're running a platform, not just an operator.
+- **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which resources are not ready, and for what reason?" -- all via standard PromQL queries and Grafana dashboards.
 - **Chargeback and showback** -- The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
 - **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs and provider MR GVRs from Active ManagedResourceDefinitions at startup.
 
@@ -41,9 +41,10 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **composit
 | Claim count by namespace | -- | Yes |
 | Claim count by creator | -- | Yes |
 | Claim count by team | -- | Yes |
-| Readiness ratio by composition | -- | Yes |
-| XR count by kind / composition | -- | Yes |
+| Readiness ratio by namespace / team | -- | Yes |
+| XR count by kind / claim linkage | -- | Yes |
 | MR count by provider / claim | -- | Yes |
+| Stuck or not-ready resources by reason | -- | Yes |
 
 > **In short:** Crossplane tells you how the *controller* is doing. xp-tracker tells you what *resources* exist, who owns them, and whether they're healthy -- the information platform teams need to run an internal developer platform.
 
@@ -628,11 +629,13 @@ make run
 │   ├── config/                      # Environment variable parsing and validation
 │   ├── kube/
 │   │   ├── client.go                # Dynamic client factory (in-cluster + kubeconfig fallback)
-│   │   ├── convert.go               # Unstructured -> ClaimInfo/XRInfo conversion
-│   │   └── poller.go                # Ticker-based polling loop with composition enrichment
+│   │   ├── convert.go               # Unstructured -> ClaimInfo/XRInfo/MRInfo conversion
+│   │   ├── discovery.go             # GVR discovery from XRDs and ManagedResourceDefinitions
+│   │   └── poller.go                # Ticker-based polling loop with claim linkage enrichment
 │   ├── metrics/
 │   │   ├── claim_collector.go       # ClaimCollector (Describe/Collect)
 │   │   ├── xr_collector.go          # XRCollector (Describe/Collect)
+│   │   ├── mr_collector.go          # MRCollector (Describe/Collect)
 │   │   └── self.go                  # Self-monitoring metrics (xp_tracker_* prefix)
 │   ├── server/
 │   │   └── server.go                # HTTP server with custom Prometheus registry
@@ -683,10 +686,11 @@ make run
 
 - The exporter does a full replace on each polling cycle. Deleted resources will disappear from metrics after the next poll (default: 30 seconds).
 
-### Composition label is empty
+### `claim_name` / `claim_namespace` labels are empty
 
-- The exporter reads the composition from the `COMPOSITION_LABEL_KEY` label on XRs (default: `crossplane.io/composition-name`). If your XRs don't have this label, set `COMPOSITION_LABEL_KEY` to the correct label key.
-- Claims get their composition via `spec.resourceRef.name` -> XR lookup. If the claim has no `spec.resourceRef`, the composition will be empty until the XR is created and linked.
+- On legacy XRs, the exporter reads `crossplane.io/claim-name` and `crossplane.io/claim-namespace` labels. If they are missing, it backfills them from the claim whose `spec.resourceRef.name` matches the XR name; the labels stay empty until the claim has been bound to its XR.
+- On MRs, the exporter reads the same claim labels, then falls back to the XR named by the `COMPOSITE_LABEL_KEY` label (default: `crossplane.io/composite`). MRs without that label are not tracked at all.
+- Native Crossplane v2 XRs have no claims, so these labels are always empty for them. See [Environment Variables](docs/configuration/environment-variables.md) for the full enrichment rules.
 
 ### Self-monitoring metrics
 

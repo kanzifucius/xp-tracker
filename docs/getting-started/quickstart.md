@@ -75,9 +75,9 @@ curl -s localhost:8080/metrics | grep crossplane_
 You should see output like:
 
 ```
-# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, composition and creator.
+# HELP crossplane_claims_total Number of Crossplane claims by group, kind, namespace, creator, claim_name, and status.
 # TYPE crossplane_claims_total gauge
-crossplane_claims_total{composition="db-small",creator="alice@example.com",group="myorg.io",kind="Database",namespace="team-a",team="platform"} 3
+crossplane_claims_total{claim_name="db-1",creator="alice@example.com",deleting="false",group="myorg.io",kind="Database",namespace="team-a",paused="false",ready="true",reason="Available",synced="true",team="platform",version="v1alpha1"} 1
 ```
 
 ## Next steps

@@ -21,7 +21,7 @@ data:
   # Optional: annotation key for team attribution.
   # TEAM_ANNOTATION_KEY: "example.org/team"
 
-  # Optional: label key on XRs for composition name. Default: crossplane.io/composition-name
+  # Optional: label key on XRs for composition name (internal enrichment only; not a metric label). Default: crossplane.io/composition-name
   # COMPOSITION_LABEL_KEY: "crossplane.io/composition-name"
 
   # Optional: seconds between polling cycles. Default: 30
