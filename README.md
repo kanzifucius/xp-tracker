@@ -27,7 +27,7 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **per-reso
 
 ### What xp-tracker adds
 
-- **Business-level dimensions** -- Every metric is broken down by `creator`, `team`, and `namespace`, plus per-resource status labels (`ready`, `reason`, `paused`, `deleting`). These are the dimensions that matter when you're running a platform, not just an operator.
+- **Business-level dimensions** -- Claim metrics are broken down by `creator`, `team`, and `namespace`; XR and MR metrics carry identity and linkage labels (`name`, `claim_name`, `claim_namespace`, and for MRs `provider`, `xr_name`) so you can trace ownership from a provider resource back to the claim. Every series also carries per-resource status labels (`ready`, `reason`, `paused`, `deleting`). These are the dimensions that matter when you're running a platform, not just an operator.
 - **Inventory and adoption tracking** -- Get real answers to "how many claims of each type exist?", "which namespaces are using the platform?", and "which resources are not ready, and for what reason?" -- all via standard PromQL queries and Grafana dashboards.
 - **Chargeback and showback** -- The `creator` + `team` + `namespace` labels make it straightforward to build cost-allocation or usage-reporting dashboards per team or business unit.
 - **Dynamic, zero-codegen** -- Works with any Crossplane CRD without code generation or recompilation. xp-tracker discovers claim and XR GVRs from XRDs and provider MR GVRs from Active ManagedResourceDefinitions at startup.
