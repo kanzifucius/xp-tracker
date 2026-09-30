@@ -1,6 +1,7 @@
 # Build output
 bin/
 /exporter
+.e2e-logs/
 
 # Go
 coverage.out

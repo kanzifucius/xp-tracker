@@ -73,6 +73,31 @@ export POLL_INTERVAL_SECONDS=10
 ./bin/xp-tracker
 ```
 
+## Crossplane e2e (kind, no kindplane)
+
+Default GitHub PR CI (`ci.yml`) is unit tests and lint only. Cluster e2e lives
+in `.github/workflows/e2e.yml` and runs on `workflow_dispatch`, weekday 06:00 UTC
+cron, and pull requests that have the `e2e` label.
+
+Locally (Docker, kind, helm, and kubectl required):
+
+```bash
+make e2e
+```
+
+That creates a one-node kind cluster, Helm-installs Crossplane 2.0.2, applies
+`hack/samples/` (including `v2-namespaced.yaml`), runs the exporter, and asserts
+`/healthz`, `/readyz`, and `/metrics` via `hack/e2e/assert-metrics.sh`. Waiting
+for `function-patch-and-transform` to become Healthy may time out while pulling
+from `xpkg.upbound.io`; the e2e job treats that as non-fatal.
+
+To re-check an exporter that is already listening:
+
+```bash
+make e2e-assert
+# or: XP_TRACKER_URL=http://127.0.0.1:8080 hack/e2e/assert-metrics.sh
+```
+
 ## Testing
 
 | Command | Description |
@@ -81,6 +106,8 @@ export POLL_INTERVAL_SECONDS=10
 | `make lint` | Run golangci-lint |
 | `make vet` | Run `go vet` |
 | `make check` | Run all checks (vet + lint + test) |
+| `make e2e` | Kind + Crossplane 2.0 cluster e2e |
+| `make e2e-assert` | Assert a running exporter on `:8080` |
 
 ## Docker
 
@@ -116,4 +143,5 @@ Run `make help` to see all available targets. Key groups:
 - **docker** -- `docker-build`, `docker-push`
 - **deploy** -- `deploy`, `undeploy`
 - **dev** -- `dev`, `run`, `run-local`
+- **e2e** -- `e2e`, `e2e-assert`
 - **samples** -- `samples-apply`, `samples-delete`
