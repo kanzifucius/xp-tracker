@@ -41,6 +41,8 @@ make help
 | `make fmt`   | Run gofmt                                |
 | `make check` | Run all checks (fmt, vet, lint, test)    |
 | `make ci`    | CI-equivalent checks                     |
+| `make e2e`   | Kind + Crossplane 2.0 e2e (opt-in)       |
+| `make e2e-assert` | Assert a running exporter on `:8080` |
 
 ## Making Changes
 
@@ -78,7 +80,10 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`
 - Link related issues
 - Ensure CI passes (`make ci`)
 - Keep PRs focused -- one feature or fix per PR
-- Update documentation if behavior changes
+- Update documentation if behaviour changes
+- Cluster e2e (`.github/workflows/e2e.yml`) does **not** run on every PR. Add
+  the `e2e` label to opt in, or run `make e2e` locally (Docker, kind, helm,
+  kubectl). Nightly weekday cron and `workflow_dispatch` also run it.
 
 ## Reporting Issues
 

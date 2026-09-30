@@ -7,6 +7,7 @@
         cover cover-html \
         samples-apply samples-delete \
         kindplane-up kindplane-down kindplane-status dev dev-down \
+        e2e e2e-assert \
         logs \
         docs-serve \
         release-tag release-latest \
@@ -167,6 +168,12 @@ dev: kindplane-up samples-apply ## Bootstrap full dev environment (cluster + sam
 
 dev-down: samples-delete kindplane-down ## Tear down full dev environment
 
+e2e: build ## Run Crossplane kind e2e (Docker, kind, helm, kubectl; not kindplane)
+	hack/e2e/run.sh --skip-build
+
+e2e-assert: ## Assert a running exporter (XP_TRACKER_URL, default http://127.0.0.1:8080)
+	hack/e2e/assert-metrics.sh
+
 logs: ## Tail exporter logs (in-cluster deployment)
 	kubectl logs -n crossplane-system deploy/crossplane-metrics-exporter -f
 
@@ -220,5 +227,5 @@ release-latest: ## Show latest releases (GitHub releases via gh, else semver-sor
 # --- Help ---
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | sort | \
+	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'

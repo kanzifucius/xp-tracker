@@ -1,0 +1,79 @@
+name: E2E
+
+# Opt-in cluster e2e. Default PR CI stays in ci.yml (unit tests + lint).
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekday morning UTC so maintainers see results during working hours.
+    - cron: "0 6 * * 1-5"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  E2E_LOG_DIR: /tmp/xp-tracker-e2e
+  # Defaults; overwritten from hack/e2e/versions.env in the first steps.
+  KIND_VERSION: v0.33.0
+  KIND_NODE_IMAGE: "kindest/node:v1.34.11@sha256:44e222ee2132dab25ff87301682f89eb82c7880ea3a1bf543bfe9708fd08d67d"
+  KIND_CLUSTER_NAME: xp-tracker-e2e
+  KUBECTL_VERSION: v1.34.2
+
+jobs:
+  e2e:
+    name: Crossplane kind e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Load pinned e2e versions
+        run: grep -vE '^(#|$)' hack/e2e/versions.env >> "${GITHUB_ENV}"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build exporter
+        run: go build -o bin/xp-tracker ./cmd/exporter
+
+      - uses: azure/setup-helm@v4
+
+      - name: Create one-node kind cluster
+        uses: helm/kind-action@v1.15.0
+        with:
+          version: ${{ env.KIND_VERSION }}
+          node_image: ${{ env.KIND_NODE_IMAGE }}
+          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
+          kubectl_version: ${{ env.KUBECTL_VERSION }}
+          config: hack/e2e/kind.yaml
+          wait: 120s
+
+      - name: Install Crossplane and assert exporter
+        run: hack/e2e/run.sh --skip-build --skip-cluster --keep-cluster
+
+      - name: Collect kind and exporter logs
+        if: failure()
+        run: |
+          mkdir -p "${E2E_LOG_DIR}/kind"
+          kind export logs "${E2E_LOG_DIR}/kind" --name "${KIND_CLUSTER_NAME}" || true
+          ls -la "${E2E_LOG_DIR}" || true
+
+      - name: Upload e2e logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: ${{ env.E2E_LOG_DIR }}
+          if-no-files-found: ignore
