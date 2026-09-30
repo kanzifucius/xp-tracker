@@ -134,6 +134,29 @@ func TestServer_MetricsEndpoint_Integration(t *testing.T) {
 	}
 }
 
+// The /bookkeeping JSON endpoint was removed; the exporter serves Prometheus
+// metrics only. Pin the 404 so a fallback handler or an accidental route
+// reintroduction cannot silently change that contract.
+func TestServer_BookkeepingEndpoint_Removed(t *testing.T) {
+	s := store.New()
+	s.ReplaceClaims("platform.example.org/v1alpha1/postgresqlinstances", []store.ClaimInfo{
+		{GVR: "platform.example.org/v1alpha1/postgresqlinstances", Group: "platform.example.org", Kind: "PostgreSQLInstance", Namespace: "team-a", Name: "db-1", Ready: true},
+	})
+
+	baseURL, cancel := startTestServer(t, s)
+	defer cancel()
+
+	resp := httpGet(t, baseURL+"/bookkeeping")
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for removed /bookkeeping endpoint, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "application/json") {
+		t.Errorf("expected no JSON response from /bookkeeping, got Content-Type %q", ct)
+	}
+}
+
 func TestServer_HealthzEndpoint(t *testing.T) {
 	s := store.New()
 	baseURL, cancel := startTestServer(t, s)
