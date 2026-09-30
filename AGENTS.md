@@ -26,6 +26,7 @@ needed**. See the `Makefile` for the full list.
 - `make lint` — `golangci-lint run ./...`
 - `make test` — `go test -race -count=1 ./...`
 - `make check` / `make ci` — run the above together
+- `make e2e` — kind + Crossplane 2.0.x + sample inventory (needs Docker, kind, helm, kubectl; **not** kindplane). CI runs this from `.github/workflows/e2e.yml` on `workflow_dispatch`, weekday 06:00 UTC cron, and pull requests labelled `e2e` only.
 
 ### Running the exporter end-to-end (requires a Crossplane cluster)
 
@@ -57,6 +58,11 @@ here**. Reproduce an equivalent local cluster manually instead:
    `KUBECONFIG=/tmp/kubeconfig CREATOR_ANNOTATION_KEY=xptracker.dev/created-by TEAM_ANNOTATION_KEY=xptracker.dev/team POLL_INTERVAL_SECONDS=10 ./bin/xp-tracker`
    Then `curl localhost:8080/metrics` (series prefixed `crossplane_` and
    `xp_tracker_store_`) and `curl localhost:8080/bookkeeping` (JSON snapshot).
+6. `make e2e` is the kindplane-free equivalent of the CI job: one-node kind,
+   Helm-install Crossplane chart `2.0.2`, apply `hack/samples/` (including
+   `v2-namespaced.yaml`), run the exporter, then `hack/e2e/assert-metrics.sh`.
+   Function `Healthy` waits may time out on `xpkg.upbound.io` pulls; that is
+   non-fatal. PRs need the `e2e` label to run this in GitHub Actions.
 
 GVRs are auto-discovered; `CLAIM_GVRS`/`XR_GVRS` env vars are deprecated static
 overrides. All configuration is via environment variables — see
