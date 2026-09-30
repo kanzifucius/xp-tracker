@@ -1,0 +1,26 @@
+# CodeRabbit Configuration
+# https://docs.coderabbit.ai/configuration
+
+language: en-GB
+
+reviews:
+  profile: chill # Lighter feedback; avoids minor/nitpicky comments
+  request_changes_workflow: false
+  high_level_summary: false
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+chat:
+  auto_reply: true
+
+tone_instructions: |
+  Be concise and direct. Focus on actionable, substantive feedback only.
+  Skip minor or stylistic nitpicks. Use British English spelling.
+
+early_access: false
