@@ -3,10 +3,13 @@
 ## Cursor Cloud specific instructions
 
 This repository is a **single Go product**: `xp-tracker`, a read-only Prometheus
-exporter for Crossplane that exposes business-level inventory metrics (resource
-counts by `creator`, `team`, `namespace`, `composition`). The entrypoint is
-`cmd/exporter`; the binary serves `:8080` with `/metrics`, `/bookkeeping`,
-`/healthz`, and `/readyz`.
+exporter for Crossplane that exposes inventory and status metrics for claims,
+composite resources (XRs), and XR-linked managed resources (MRs). Claim series
+carry `creator`/`team`/`namespace` attribution; XR and MR series carry identity
+and claim-linkage labels; all carry per-resource status (`ready`, `reason`,
+`paused`, `deleting`). Composition is resolved internally but is **not** a
+metric dimension. The entrypoint is `cmd/exporter`; the binary serves `:8080`
+with `/metrics`, `/healthz`, and `/readyz`.
 
 ### Toolchain
 
@@ -57,7 +60,7 @@ here**. Reproduce an equivalent local cluster manually instead:
    samples:
    `KUBECONFIG=/tmp/kubeconfig CREATOR_ANNOTATION_KEY=xptracker.dev/created-by TEAM_ANNOTATION_KEY=xptracker.dev/team POLL_INTERVAL_SECONDS=10 ./bin/xp-tracker`
    Then `curl localhost:8080/metrics` (series prefixed `crossplane_` and
-   `xp_tracker_store_`) and `curl localhost:8080/bookkeeping` (JSON snapshot).
+   `xp_tracker_store_`).
 6. `make e2e` is the kindplane-free equivalent of the CI job: one-node kind,
    Helm-install Crossplane chart `2.0.2`, apply `hack/samples/` (including
    `v2-namespaced.yaml`), run the exporter, then `hack/e2e/assert-metrics.sh`.

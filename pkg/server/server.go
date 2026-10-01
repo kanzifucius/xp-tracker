@@ -44,7 +44,6 @@ func New(addr string, s store.Store) *Server {
 	mux.Handle("GET /metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{
 		EnableOpenMetrics: false, // stick to classic Prometheus text format
 	}))
-	mux.HandleFunc("GET /bookkeeping", bookkeepingHandler(s))
 	mux.HandleFunc("GET /healthz", srv.healthzHandler)
 	mux.HandleFunc("GET /readyz", srv.readyzHandler)
 

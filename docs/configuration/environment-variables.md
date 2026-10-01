@@ -11,7 +11,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `KUBE_NAMESPACE_SCOPE` | No | `""` (all) | Comma-separated namespace filter |
 | `CREATOR_ANNOTATION_KEY` | No | `""` | Annotation key for claim creator attribution |
 | `TEAM_ANNOTATION_KEY` | No | `""` | Annotation key for team attribution |
-| `COMPOSITION_LABEL_KEY` | No | `crossplane.io/composition-name` | Label key on XRs for composition name |
+| `COMPOSITION_LABEL_KEY` | No | `crossplane.io/composition-name` | Label key on XRs for composition name (internal enrichment only; not exposed as a metric label) |
 | `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
 | `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
@@ -86,6 +86,9 @@ TEAM_ANNOTATION_KEY="myorg.io/team"
 If the annotation is not present on a claim, the label value will be an empty string.
 
 ## Composition label
+
+!!! note
+    Composition is resolved internally and persisted in store snapshots, but it is **not** exposed as a Prometheus label on any metric. Most deployments can leave `COMPOSITION_LABEL_KEY` at its default.
 
 The `COMPOSITION_LABEL_KEY` tells xp-tracker which label on XRs contains the Composition name. The default (`crossplane.io/composition-name`) works with standard Crossplane installations. For v2 XRs without this label, xp-tracker falls back to `spec.crossplane.compositionRef.name`.
 
