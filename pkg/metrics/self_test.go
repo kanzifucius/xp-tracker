@@ -26,6 +26,7 @@ func TestRegisterSelfMetrics(t *testing.T) {
 		"xp_tracker_store_xrs":                   false,
 		"xp_tracker_store_mrs":                   false,
 		"xp_tracker_s3_persist_duration_seconds": false,
+		"xp_tracker_mrd_discovery_skipped_total": false,
 	}
 
 	for _, fam := range families {

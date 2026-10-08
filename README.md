@@ -202,7 +202,7 @@ If no XR GVRs can be discovered from XRDs, startup fails with a clear error. Cla
 
 ### Provider MR discovery
 
-At startup, xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`). Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
+At startup, xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`). Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Active MRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_mrd_discovery_skipped_total`) instead of failing startup. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
 
 ### Static GVR overrides (deprecated)
 
@@ -703,6 +703,7 @@ xp-tracker also exposes metrics about its own operation under the `xp_tracker_` 
 | `xp_tracker_store_claims` | Gauge | Current number of claims in the store |
 | `xp_tracker_store_xrs` | Gauge | Current number of XRs in the store |
 | `xp_tracker_s3_persist_duration_seconds` | Histogram | Duration of each S3 persist operation |
+| `xp_tracker_mrd_discovery_skipped_total` | Counter | Active MRDs skipped at startup because their spec was unusable (`reason` label) |
 
 ### Single replica requirement
 

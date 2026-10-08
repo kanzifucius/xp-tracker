@@ -74,6 +74,19 @@ spec:
             description: |
               Prometheus cannot find xp-tracker self metrics. Scrape or exporter may be down.
 
+        - alert: XpTrackerMRDDiscoverySkipped
+          expr: sum(xp_tracker_mrd_discovery_skipped_total) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: xp-tracker skipped malformed ManagedResourceDefinitions
+            description: |
+              One or more Active MRDs could not yield a GVR at startup
+              (see xp_tracker_mrd_discovery_skipped_total by reason).
+              Check exporter logs for the MRD name and repair the cluster
+              object (for example truncated MRDs from crossplane#7817).
+
     - name: xp-tracker-resource-health
       rules:
         - alert: XpTrackerClaimReadinessLow
