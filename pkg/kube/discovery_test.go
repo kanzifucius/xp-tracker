@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,6 +12,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 
 	"github.com/kanzifucius/xp-tracker/pkg/config"
+	"github.com/kanzifucius/xp-tracker/pkg/metrics"
 )
 
 func TestDiscoverFromXRD(t *testing.T) {
@@ -227,6 +229,123 @@ func TestDiscoverMRGVRsFromMRDs_EmptyWhenNoActiveMRDs(t *testing.T) {
 	}
 	if len(providers) != 0 {
 		t.Fatalf("expected 0 provider mappings, got %d", len(providers))
+	}
+}
+
+func TestDiscoverMRGVRsFromMRDs_SkipsMalformedMRD(t *testing.T) {
+	healthy := activeMRD("nopresources.nop.crossplane.io", "nop.crossplane.io", "nopresources", "provider-nop")
+
+	// Modelled on truncated MRDs from crossplane/crossplane#7817: Active,
+	// versions present, but every version has served=false and storage=false.
+	truncated := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.crossplane.io/v1alpha1",
+			"kind":       "ManagedResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "accountlocalusers.storage.azure.upbound.io",
+			},
+			"spec": map[string]interface{}{
+				"group": "storage.azure.upbound.io",
+				"names": map[string]interface{}{
+					"plural": "accountlocalusers",
+				},
+				"state": "Active",
+				"versions": []interface{}{
+					map[string]interface{}{"name": "v1beta1", "served": false, "storage": false},
+					map[string]interface{}{"name": "v1beta2", "served": false, "storage": false},
+				},
+			},
+		},
+	}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			mrdGVR: "ManagedResourceDefinitionList",
+		},
+		healthy, truncated,
+	)
+
+	reason := metrics.MRDSkipReasonNoStorageOrServedVersion
+	before := testutil.ToFloat64(metrics.MRDDiscoverySkipped.WithLabelValues(reason))
+
+	gvrs, providers, _, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverMRGVRsFromMRDs error: %v", err)
+	}
+	if len(gvrs) != 1 {
+		t.Fatalf("expected 1 MR GVR (healthy only), got %d", len(gvrs))
+	}
+	if gvrs[0].Resource != "nopresources" {
+		t.Fatalf("expected healthy nopresources GVR, got %+v", gvrs[0])
+	}
+	if len(providers) != 1 {
+		t.Fatalf("expected 1 provider mapping, got %d", len(providers))
+	}
+
+	after := testutil.ToFloat64(metrics.MRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 1 {
+		t.Fatalf("skipped counter delta = %v, want 1 for reason %q", got, reason)
+	}
+}
+
+func TestDiscoverMRGVRsFromMRDs_SkipsMissingVersions(t *testing.T) {
+	healthy := activeMRD("nopresources.nop.crossplane.io", "nop.crossplane.io", "nopresources", "provider-nop")
+	broken := activeMRD("broken.example.org", "example.org", "brokens", "provider-broken")
+	delete(broken.Object["spec"].(map[string]interface{}), "versions")
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			mrdGVR: "ManagedResourceDefinitionList",
+		},
+		healthy, broken,
+	)
+
+	reason := metrics.MRDSkipReasonMissingVersions
+	before := testutil.ToFloat64(metrics.MRDDiscoverySkipped.WithLabelValues(reason))
+
+	gvrs, _, _, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverMRGVRsFromMRDs error: %v", err)
+	}
+	if len(gvrs) != 1 {
+		t.Fatalf("expected 1 MR GVR, got %d", len(gvrs))
+	}
+
+	after := testutil.ToFloat64(metrics.MRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 1 {
+		t.Fatalf("skipped counter delta = %v, want 1 for reason %q", got, reason)
+	}
+}
+
+func TestDiscoverMRGVRsFromMRDs_SkipsMissingPlural(t *testing.T) {
+	healthy := activeMRD("nopresources.nop.crossplane.io", "nop.crossplane.io", "nopresources", "provider-nop")
+	broken := activeMRD("broken.example.org", "example.org", "brokens", "provider-broken")
+	broken.Object["spec"].(map[string]interface{})["names"] = map[string]interface{}{}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			mrdGVR: "ManagedResourceDefinitionList",
+		},
+		healthy, broken,
+	)
+
+	reason := metrics.MRDSkipReasonMissingPlural
+	before := testutil.ToFloat64(metrics.MRDDiscoverySkipped.WithLabelValues(reason))
+
+	gvrs, _, _, err := DiscoverMRGVRsFromMRDs(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverMRGVRsFromMRDs error: %v", err)
+	}
+	if len(gvrs) != 1 {
+		t.Fatalf("expected 1 MR GVR, got %d", len(gvrs))
+	}
+
+	after := testutil.ToFloat64(metrics.MRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 1 {
+		t.Fatalf("skipped counter delta = %v, want 1 for reason %q", got, reason)
 	}
 }
 

@@ -195,6 +195,12 @@ Histogram tracking the duration of S3 snapshot persistence. Only emitted when `S
 
 **Default buckets:** 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30 seconds.
 
+### `xp_tracker_mrd_discovery_skipped_total`
+
+Counter of Active `ManagedResourceDefinition` objects skipped during startup MR GVR discovery because their spec could not yield a usable group/version/resource. Partitioned by `reason` (`missing_group`, `missing_plural`, `missing_versions`, `no_storage_or_served_version`, `other`). Known reasons are initialised at 0 so alerts on `> 0` work immediately after scrape.
+
+A non-zero value usually means malformed cluster state (for example truncated MRDs from [crossplane/crossplane#7817](https://github.com/crossplane/crossplane/issues/7817)); the exporter continues with the remaining MR types.
+
 ### Example PromQL for self-monitoring
 
 ```promql
@@ -209,4 +215,7 @@ xp_tracker_store_claims + xp_tracker_store_xrs
 
 # 99th percentile S3 persist latency
 histogram_quantile(0.99, rate(xp_tracker_s3_persist_duration_seconds_bucket[5m]))
+
+# MRDs skipped at discovery (cluster data-quality)
+sum(xp_tracker_mrd_discovery_skipped_total)
 ```

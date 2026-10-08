@@ -43,6 +43,8 @@ xp-tracker discovers provider Managed Resource (MR) GVRs from Crossplane `Manage
 4. Attributes the provider package from `pkg.crossplane.io/package` or a `Provider` owner reference
 5. Merges any additional GVRs from `MR_GVRS` (deduplicated)
 
+If an Active MRD's spec cannot yield a GVR (for example, no version with `storage: true` or `served: true`), that MRD is skipped with a warning and counted in `xp_tracker_mrd_discovery_skipped_total` rather than failing startup. A known cause is truncated MRDs written by the Crossplane package establisher ([crossplane/crossplane#7817](https://github.com/crossplane/crossplane/issues/7817)); repair the cluster object (or upgrade Crossplane once the fix lands) so the missing MR type is tracked again.
+
 During polling, only MRs with the composite label (`crossplane.io/composite` by default) are tracked. Claim linkage is enriched from MR claim labels or the backing XR when a legacy claim exists. Namespaced v2 MRs are matched to an XR in the same namespace.
 
 An empty MR GVR list is valid (for example, when MRD conversion is disabled — use `MR_GVRS` in that case).

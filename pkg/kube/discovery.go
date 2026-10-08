@@ -2,7 +2,9 @@ package kube
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -12,6 +14,17 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/kanzifucius/xp-tracker/pkg/config"
+	"github.com/kanzifucius/xp-tracker/pkg/metrics"
+)
+
+// Sentinel errors returned when deriving a GVR from an MRD (or shared
+// apiExtensionSpec) fails. Mapped to short Prometheus reason labels in
+// mrdSkipReason so operators can alert without crashing the exporter.
+var (
+	errMissingGroup             = errors.New("missing spec.group")
+	errMissingPlural            = errors.New("missing spec.names.plural")
+	errMissingVersions          = errors.New("missing spec.versions")
+	errNoStorageOrServedVersion = errors.New("no storage or served version found")
 )
 
 const packageLabelKey = "pkg.crossplane.io/package"
@@ -92,7 +105,10 @@ func DiscoverMRGVRsFromMRDs(ctx context.Context, client dynamic.Interface) ([]sc
 			if name == "" {
 				name = "<unknown>"
 			}
-			return nil, nil, nil, fmt.Errorf("derive GVR from MRD %q: %w", name, err)
+			reason := mrdSkipReason(err)
+			slog.Warn("skipping MRD with unusable spec", "mrd", name, "reason", reason, "error", err)
+			metrics.MRDDiscoverySkipped.WithLabelValues(reason).Inc()
+			continue
 		}
 
 		key := gvrKey(mrGVR)
@@ -157,12 +173,12 @@ func mrdToGVR(mrd unstructured.Unstructured) (schema.GroupVersionResource, error
 func apiExtensionSpecToGVR(obj unstructured.Unstructured) (schema.GroupVersionResource, error) {
 	group, found, err := unstructured.NestedString(obj.Object, "spec", "group")
 	if err != nil || !found || group == "" {
-		return schema.GroupVersionResource{}, fmt.Errorf("missing spec.group")
+		return schema.GroupVersionResource{}, errMissingGroup
 	}
 
 	plural, found, err := unstructured.NestedString(obj.Object, "spec", "names", "plural")
 	if err != nil || !found || plural == "" {
-		return schema.GroupVersionResource{}, fmt.Errorf("missing spec.names.plural")
+		return schema.GroupVersionResource{}, errMissingPlural
 	}
 
 	version, err := selectCRDVersion(obj)
@@ -180,7 +196,7 @@ func apiExtensionSpecToGVR(obj unstructured.Unstructured) (schema.GroupVersionRe
 func selectCRDVersion(crd unstructured.Unstructured) (string, error) {
 	versions, found, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
 	if err != nil || !found || len(versions) == 0 {
-		return "", fmt.Errorf("missing spec.versions")
+		return "", errMissingVersions
 	}
 
 	for _, v := range versions {
@@ -207,7 +223,23 @@ func selectCRDVersion(crd unstructured.Unstructured) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no storage or served version found")
+	return "", errNoStorageOrServedVersion
+}
+
+// mrdSkipReason maps a GVR-derivation error to a short Prometheus label value.
+func mrdSkipReason(err error) string {
+	switch {
+	case errors.Is(err, errMissingGroup):
+		return metrics.MRDSkipReasonMissingGroup
+	case errors.Is(err, errMissingPlural):
+		return metrics.MRDSkipReasonMissingPlural
+	case errors.Is(err, errMissingVersions):
+		return metrics.MRDSkipReasonMissingVersions
+	case errors.Is(err, errNoStorageOrServedVersion):
+		return metrics.MRDSkipReasonNoStorageOrServedVersion
+	default:
+		return metrics.MRDSkipReasonOther
+	}
 }
 
 func xrdToGVRs(xrd unstructured.Unstructured) (schema.GroupVersionResource, schema.GroupVersionResource, bool, error) {
