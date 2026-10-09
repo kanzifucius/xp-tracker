@@ -1,5 +1,7 @@
 # Stage 1: Build
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+# Pulled via Google's unauthenticated Docker Hub mirror to avoid 429 rate
+# limits on shared CI runners (Docker Hub throttles anonymous pulls by IP).
+FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/golang:1.25-alpine AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
