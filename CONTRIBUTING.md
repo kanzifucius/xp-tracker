@@ -10,6 +10,7 @@ Thanks for your interest in contributing to xp-tracker. This document covers the
 - Docker (for container builds)
 - kubectl
 - [kindplane](https://github.com/kanzi/kindplane) (recommended for local dev)
+- [golangci-lint](https://golangci-lint.run/) `2.9.0` (pinned in `.mise.toml`; CI uses the same version)
 
 ### Development Setup
 
@@ -36,13 +37,16 @@ make help
 | Command      | Description                              |
 |--------------|------------------------------------------|
 | `make test`  | Run tests with race detector             |
-| `make lint`  | Run golangci-lint                        |
+| `make cover` | Run tests with a coverage profile        |
+| `make lint`  | Run golangci-lint (pinned via mise)      |
 | `make vet`   | Run go vet                               |
 | `make fmt`   | Run gofmt                                |
 | `make check` | Run all checks (fmt, vet, lint, test)    |
 | `make ci`    | CI-equivalent checks                     |
 | `make e2e`   | Kind + Crossplane 2.0 e2e (opt-in)       |
 | `make e2e-assert` | Assert a running exporter on `:8080` |
+
+CI also runs `govulncheck ./...` (soft-gated with `continue-on-error` until the Go toolchain moves past 1.25.5) and uploads a `coverage.out` artefact from the test job. There is no hard coverage floor yet.
 
 ## Making Changes
 

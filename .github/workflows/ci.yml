@@ -34,10 +34,26 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          # Keep in sync with .mise.toml
+          version: v2.9.0
 
       - name: Run tests
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+
+      - name: Upload coverage artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: error
+
+      - name: Run govulncheck
+        # Soft-gated until Go toolchain moves past 1.25.5 (stdlib findings).
+        # Flip continue-on-error to false after a Go patch/1.26 bump.
+        continue-on-error: true
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
   build-push:
     name: Build & Push Image

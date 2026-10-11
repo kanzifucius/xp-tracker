@@ -129,7 +129,7 @@ The project uses [mise](https://mise.jdx.dev/) for tool version pinning via `.mi
 | Tool | Version |
 |---|---|
 | Go | 1.25.5 |
-| golangci-lint | 1.64.8 |
+| golangci-lint | 2.9.0 |
 | kubectl | 1.34.2 |
 
 Run `mise install` to install the pinned versions.
