@@ -48,7 +48,7 @@ jobs:
       - name: Build exporter
         run: go build -o bin/xp-tracker ./cmd/exporter
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
 
       - name: Create one-node kind cluster
         uses: helm/kind-action@v1.15.0
