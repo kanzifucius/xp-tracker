@@ -14,7 +14,7 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Kustomize Base"
 
-    The recommended way to deploy xp-tracker. The base deploys to the `crossplane-system` namespace and discovers claim/XR GVRs from XRDs at startup:
+    The recommended way to deploy xp-tracker with plain manifests. The base deploys to the `crossplane-system` namespace and discovers claim/XR GVRs from XRDs at startup:
 
     ```bash
     # Review what will be applied
@@ -23,6 +23,19 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
     # Apply
     kubectl apply -k deploy/base
     ```
+
+=== "Helm"
+
+    Thin chart wrapping the same resources as `deploy/base`. Image tags are pinned (defaults to `Chart.appVersion`; `:latest` is rejected):
+
+    ```bash
+    helm upgrade --install xp-tracker charts/xp-tracker \
+      --namespace crossplane-system \
+      --create-namespace \
+      --set image.tag=v0.4.0
+    ```
+
+    See [Helm deployment](../deployment/helm.md) for values, RBAC, and configuration.
 
 === "Kustomize Overlay"
 

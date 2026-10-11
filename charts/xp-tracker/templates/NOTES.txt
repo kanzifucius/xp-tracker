@@ -1,0 +1,14 @@
+xp-tracker has been installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Image: {{ include "xp-tracker.image" . }}
+
+Metrics Service:
+  {{ include "xp-tracker.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/metrics
+
+Verify:
+  kubectl -n {{ .Release.Namespace }} get deploy,svc,cm {{ include "xp-tracker.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "xp-tracker.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -s localhost:8080/metrics | head
+
+This chart mirrors deploy/base. For least-privilege RBAC, set rbac.rules (see docs/deployment/rbac.md).
+Keep replicaCount at 1 to avoid double-counted metrics.

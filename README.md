@@ -307,13 +307,14 @@ The base Deployment manifests configure Kubernetes liveness and readiness probes
 
 ## Deployment
 
-The exporter ships with [Kustomize](https://kustomize.io/) manifests.
+The exporter ships with [Kustomize](https://kustomize.io/) manifests and a thin [Helm](https://helm.sh/) chart that wraps the same `deploy/base` resources.
 
 ### Prerequisites
 
 - A Kubernetes cluster with Crossplane installed
 - Crossplane CRDs (XRDs) and Compositions deployed
 - `kubectl` with access to the cluster
+- Helm 3.x (only if using the chart)
 
 ### Quick start (base)
 
@@ -326,6 +327,23 @@ kubectl kustomize deploy/base
 # Apply
 kubectl apply -k deploy/base
 ```
+
+### Helm chart
+
+The chart at `charts/xp-tracker/` mirrors ServiceAccount, RBAC, ConfigMap, Deployment, and Service from `deploy/base`. Image tags are pinned (defaults to `Chart.appVersion`; empty/`latest` tags are rejected):
+
+```bash
+# Review rendered manifests
+helm template xp-tracker charts/xp-tracker --namespace crossplane-system
+
+# Install
+helm upgrade --install xp-tracker charts/xp-tracker \
+  --namespace crossplane-system \
+  --create-namespace \
+  --set image.tag=v0.4.0
+```
+
+See [docs/deployment/helm.md](docs/deployment/helm.md) for values, RBAC scoping, and configuration.
 
 ### Using the example overlay
 
@@ -657,6 +675,8 @@ make run
 │   └── store/
 │       ├── store.go                 # Store interface + MemoryStore implementation
 │       └── s3store.go               # S3Store persistent backend (decorator over MemoryStore)
+├── charts/
+│   └── xp-tracker/                  # Thin Helm chart wrapping deploy/base (pinned image tags)
 ├── deploy/
 │   ├── base/                        # Kustomize base (SA, RBAC, ConfigMap, Deployment, Service)
 │   └── overlays/

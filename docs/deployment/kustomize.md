@@ -1,6 +1,6 @@
 # Kustomize Deployment
 
-xp-tracker ships with [Kustomize](https://kustomize.io/) manifests organised as a base plus overlays.
+xp-tracker ships with [Kustomize](https://kustomize.io/) manifests organised as a base plus overlays. If you prefer Helm, use the thin chart documented in [Helm deployment](helm.md).
 
 ## Base
 
