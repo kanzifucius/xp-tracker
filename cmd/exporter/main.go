@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -114,15 +113,16 @@ func run() error {
 		poller.Run(ctx)
 	}()
 
-	// Mark the server as ready after the first poll cycle completes.
-	// The poller runs an initial poll synchronously before entering the
-	// ticker loop, so by the time Run returns control we can signal readiness.
-	// We use a small goroutine to avoid blocking if the first poll is slow.
+	// Mark the server as ready only after the first poll cycle completes
+	// (even if some GVR polls errored). This avoids the previous fixed sleep
+	// that could race ahead of a slow first cycle.
 	go func() {
-		// Wait briefly for the first poll to finish (Run does an immediate poll).
-		time.Sleep(100 * time.Millisecond)
-		srv.SetReady()
-		slog.Info("server marked as ready")
+		select {
+		case <-poller.FirstPollDone():
+			srv.SetReady()
+			slog.Info("server marked as ready")
+		case <-ctx.Done():
+		}
 	}()
 
 	slog.Info("exporter running", "metrics_addr", cfg.MetricsAddr)
@@ -150,8 +150,20 @@ func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *co
 	if len(xrGVRs) == 0 {
 		return fmt.Errorf("no XR GVRs discovered from XRDs; ensure Crossplane XRDs exist in the cluster")
 	}
-	cfg.ClaimGVRs = claimGVRs
-	cfg.XRGVRs = xrGVRs
+
+	// Preserve env-configured CLAIM_GVRS / XR_GVRS before applying discovery.
+	// These are deprecated additive overrides merged with XRD discovery.
+	envClaimGVRs := cfg.ClaimGVRs
+	envXRGVRs := cfg.XRGVRs
+	if len(envClaimGVRs) > 0 || len(envXRGVRs) > 0 {
+		slog.Warn("CLAIM_GVRS and/or XR_GVRS are deprecated; values are merged with XRD discovery (deduplicated)",
+			"claim_gvrs", formatGVRs(envClaimGVRs),
+			"xr_gvrs", formatGVRs(envXRGVRs),
+		)
+	}
+
+	cfg.ClaimGVRs = mergeGVRs(claimGVRs, envClaimGVRs)
+	cfg.XRGVRs = mergeGVRs(xrGVRs, envXRGVRs)
 	cfg.XRGVRSScopes = xrScopes
 
 	mrGVRs, providerNames, mrScopes, err := kube.DiscoverMRGVRsFromMRDs(ctx, client)
@@ -173,25 +185,31 @@ func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *co
 	}
 
 	// Merge env-configured MR_GVRS (additive, deduplicated).
-	seen := make(map[string]struct{}, len(mrGVRs)+len(cfg.MRGVRs))
-	merged := make([]schema.GroupVersionResource, 0, len(mrGVRs)+len(cfg.MRGVRs))
-	for _, gvr := range mrGVRs {
-		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		merged = append(merged, gvr)
-	}
-	for _, gvr := range cfg.MRGVRs {
-		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		merged = append(merged, gvr)
-	}
-	cfg.MRGVRs = merged
+	cfg.MRGVRs = mergeGVRs(mrGVRs, cfg.MRGVRs)
 
 	return nil
+}
+
+// mergeGVRs returns discovered GVRs plus any extras not already present
+// (deduplicated by group/version/resource).
+func mergeGVRs(discovered, extra []schema.GroupVersionResource) []schema.GroupVersionResource {
+	seen := make(map[string]struct{}, len(discovered)+len(extra))
+	merged := make([]schema.GroupVersionResource, 0, len(discovered)+len(extra))
+	for _, gvr := range discovered {
+		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, gvr)
+	}
+	for _, gvr := range extra {
+		key := gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, gvr)
+	}
+	return merged
 }

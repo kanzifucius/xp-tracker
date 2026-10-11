@@ -67,6 +67,6 @@ here**. Reproduce an equivalent local cluster manually instead:
    Function `Healthy` waits may time out on `xpkg.upbound.io` pulls; that is
    non-fatal. PRs need the `e2e` label to run this in GitHub Actions.
 
-GVRs are auto-discovered; `CLAIM_GVRS`/`XR_GVRS` env vars are deprecated static
-overrides. All configuration is via environment variables — see
-`deploy/base/configmap.yaml` and the `README` for the full list.
+GVRs are auto-discovered; `CLAIM_GVRS`/`XR_GVRS` env vars are deprecated additive
+merges with discovery (deduplicated). All configuration is via environment
+variables — see `deploy/base/configmap.yaml` and the `README` for the full list.

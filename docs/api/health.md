@@ -10,9 +10,11 @@ Use this to detect if the process is alive. The HTTP server binds on startup and
 
 ## `GET /readyz`
 
-Readiness probe. Returns `503 Service Unavailable` until the first poll cycle completes, then `200 OK` with body `ok`.
+Readiness probe. Returns `503 Service Unavailable` until the first poll cycle **completes**, then `200 OK` with body `ok`.
 
-This prevents Kubernetes from sending traffic (including Prometheus scrapes) to the exporter before it has populated the in-memory store. Without this, Prometheus would scrape empty metrics on startup.
+Completion means the poller finished one full cycle (claims, XRs, and MRs). The server becomes ready even if some GVR list calls errored during that cycle, so probes do not hang forever when a single type is temporarily unavailable. Metrics may still be partial until later successful cycles.
+
+This prevents Kubernetes from sending traffic (including Prometheus scrapes) to the exporter before the first poll attempt has finished. Without this, Prometheus could scrape empty metrics on startup.
 
 ## Deployment probes
 

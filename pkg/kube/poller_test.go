@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	clienttesting "k8s.io/client-go/testing"
 
 	"github.com/kanzifucius/xp-tracker/pkg/config"
 	"github.com/kanzifucius/xp-tracker/pkg/store"
@@ -534,4 +536,68 @@ func TestPoller_V2NamespacedResourcesRespectNamespaceScope(t *testing.T) {
 	if len(mrs) != 1 || mrs[0].Namespace != "team-a" {
 		t.Fatalf("expected only the namespaced team-a MR, got %#v", mrs)
 	}
+}
+
+func TestPoller_FirstPollDoneAfterPollCompletes(t *testing.T) {
+	xrGVR := schema.GroupVersionResource{
+		Group: "platform.example.org", Version: "v1alpha1", Resource: "xpostgresqlinstances",
+	}
+
+	client := newFakeClient(map[schema.GroupVersionResource]string{
+		xrGVR: "XPostgreSQLInstanceList",
+	})
+
+	releaseList := make(chan struct{})
+	listStarted := make(chan struct{})
+	var signalStart sync.Once
+	client.PrependReactor("list", "*", func(action clienttesting.Action) (bool, runtime.Object, error) {
+		signalStart.Do(func() { close(listStarted) })
+		<-releaseList
+		return false, nil, nil
+	})
+
+	cfg := &config.Config{
+		XRGVRs:              []schema.GroupVersionResource{xrGVR},
+		PollIntervalSeconds: 30,
+	}
+	s := store.New()
+	poller := NewPoller(client, cfg, s)
+
+	select {
+	case <-poller.FirstPollDone():
+		t.Fatal("FirstPollDone closed before poll started")
+	default:
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		poller.poll(context.Background())
+	}()
+
+	select {
+	case <-listStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("list reactor never started")
+	}
+
+	select {
+	case <-poller.FirstPollDone():
+		t.Fatal("FirstPollDone closed while poll still in progress")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(releaseList)
+	<-done
+
+	select {
+	case <-poller.FirstPollDone():
+		// expected
+	case <-time.After(time.Second):
+		t.Fatal("FirstPollDone not closed after poll finished")
+	}
+
+	// Clear the blocking reactor before a second cycle.
+	client.ReactionChain = client.ReactionChain[1:]
+	poller.poll(context.Background())
 }
