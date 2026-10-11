@@ -40,3 +40,50 @@ This project follows a coordinated disclosure model:
 4. After the fix is available, a public advisory is published with appropriate credit to the reporter (unless anonymity is requested).
 
 We ask that reporters refrain from publicly disclosing the vulnerability until a fix has been released.
+
+## Container image provenance and SBOM
+
+Release tags and `main` pushes publish multi-arch images to
+`ghcr.io/kanzifucius/xp-tracker` with GitHub Artifact Attestations:
+
+- **SLSA build provenance** (Sigstore keyless OIDC via GitHub Actions — no
+  long-lived signing secrets)
+- **SPDX SBOM** generated with Syft (`anchore/sbom-action`) and attached as a
+  signed attestation (also uploaded as a release asset on tagged releases)
+
+Attestations are written to the GitHub attestations API and pushed to GHCR as
+OCI referrers (Cosign bundle layout).
+
+### Verify provenance
+
+Requires [GitHub CLI](https://cli.github.com/) `gh` ≥ 2.49 with attestation
+support, and a local Docker credential for GHCR if the image is private:
+
+```bash
+docker login ghcr.io
+
+# Replace the tag with a release version or digest
+gh attestation verify oci://ghcr.io/kanzifucius/xp-tracker:1.2.3 \
+  -R kanzifucius/xp-tracker
+```
+
+### Verify the SBOM attestation
+
+```bash
+gh attestation verify oci://ghcr.io/kanzifucius/xp-tracker:1.2.3 \
+  -R kanzifucius/xp-tracker \
+  --predicate-type https://spdx.dev/Document/v2.3
+```
+
+To inspect the SBOM predicate:
+
+```bash
+gh attestation verify oci://ghcr.io/kanzifucius/xp-tracker:1.2.3 \
+  -R kanzifucius/xp-tracker \
+  --predicate-type https://spdx.dev/Document/v2.3 \
+  --format json \
+  --jq '.[].verificationResult.statement.predicate'
+```
+
+Tagged releases also attach `xp-tracker-sbom.spdx.json` as a GitHub Release
+asset for offline inspection.
