@@ -168,8 +168,8 @@ The snapshot is a single JSON file at `s3://<bucket>/<prefix>/snapshot.json`, ov
 
 ## Configuration
 
-xp-tracker discovers XR GVRs from Crossplane v1 and v2 `CompositeResourceDefinition` objects, derives legacy claim GVRs where `claimNames` is present, and discovers provider MR GVRs from Active `ManagedResourceDefinition` objects at startup.
-Environment variables are still used for namespace filtering, annotation/label keys, polling cadence, server address, and optional additive GVR overrides.
+xp-tracker discovers XR GVRs from Crossplane v1 and v2 `CompositeResourceDefinition` objects, derives legacy claim GVRs where `claimNames` is present, and discovers provider MR GVRs from Active `ManagedResourceDefinition` objects at startup and on a configurable re-discovery interval.
+Environment variables are still used for namespace filtering, annotation/label keys, polling and discovery cadence, server address, and optional additive GVR overrides.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
@@ -182,6 +182,7 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `COMPOSITE_LABEL_KEY` | no | `crossplane.io/composite` | Label key on MRs linking them to a composite |
 | `MR_GVRS` | no | `""` | Additional MR GVRs merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
+| `DISCOVERY_INTERVAL_SECONDS` | no | `300` | Seconds between XRD/MRD re-discovery cycles; `0` disables periodic re-discovery |
 | `METRICS_ADDR` | no | `:8080` | Listen address for HTTP metrics |
 | `STORE_BACKEND` | no | `memory` | Persistent store backend: `memory` or `s3` |
 | `S3_BUCKET` | when `s3` | `""` | S3 bucket name |
@@ -191,18 +192,18 @@ Environment variables are still used for namespace filtering, annotation/label k
 
 ### XRD discovery
 
-At startup, xp-tracker lists XRDs from `apiextensions.crossplane.io/v1` and `apiextensions.crossplane.io/v2` and derives:
+At startup (and every `DISCOVERY_INTERVAL_SECONDS` by default), xp-tracker lists XRDs from `apiextensions.crossplane.io/v1` and `apiextensions.crossplane.io/v2` and derives:
 
 1. XR GVR from `spec.group` + selected `spec.versions[].name` + `spec.names.plural`
 2. Claim GVR from `spec.group` + selected `spec.versions[].name` + `spec.claimNames.plural` (when present on legacy XRDs)
 
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
 
-If no XR GVRs can be discovered from XRDs, startup fails with a clear error. Claims are optional because native Crossplane v2 XRDs do not support them. Deprecated `CLAIM_GVRS` / `XR_GVRS` values are merged into the discovered sets (deduplicated) and do not replace discovery.
+If no XR GVRs can be discovered from XRDs, startup fails with a clear error. A failed periodic refresh keeps the previous inventory. Claims are optional because native Crossplane v2 XRDs do not support them. Deprecated `CLAIM_GVRS` / `XR_GVRS` values are merged into the discovered sets (deduplicated) and do not replace discovery. Set `DISCOVERY_INTERVAL_SECONDS=0` to disable periodic re-discovery.
 
 ### Provider MR discovery
 
-At startup, xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`). Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Active MRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_mrd_discovery_skipped_total`) instead of failing startup. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
+xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`) at startup and on each re-discovery cycle. Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Active MRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_mrd_discovery_skipped_total`) instead of failing discovery. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
 
 ### Additional claim/XR GVRs (deprecated)
 
@@ -703,7 +704,9 @@ xp-tracker also exposes metrics about its own operation under the `xp_tracker_` 
 | `xp_tracker_store_claims` | Gauge | Current number of claims in the store |
 | `xp_tracker_store_xrs` | Gauge | Current number of XRs in the store |
 | `xp_tracker_s3_persist_duration_seconds` | Histogram | Duration of each S3 persist operation |
-| `xp_tracker_mrd_discovery_skipped_total` | Counter | Active MRDs skipped at startup because their spec was unusable (`reason` label) |
+| `xp_tracker_mrd_discovery_skipped_total` | Counter | Active MRDs skipped during discovery because their spec was unusable (`reason` label) |
+| `xp_tracker_discovery_runs_total` | Counter | XRD/MRD discovery runs (`result`=`success` or `error`) |
+| `xp_tracker_discovery_duration_seconds` | Histogram | Duration of each XRD/MRD discovery run |
 
 ### Single replica requirement
 

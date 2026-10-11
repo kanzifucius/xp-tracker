@@ -7,13 +7,16 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
 	"github.com/kanzifucius/xp-tracker/pkg/config"
 	"github.com/kanzifucius/xp-tracker/pkg/kube"
+	"github.com/kanzifucius/xp-tracker/pkg/metrics"
 	"github.com/kanzifucius/xp-tracker/pkg/server"
 	"github.com/kanzifucius/xp-tracker/pkg/store"
 )
@@ -24,6 +27,9 @@ var (
 	commit  = "unknown"
 	date    = "unknown"
 )
+
+// warnDeprecatedGVRsOnce logs the CLAIM_GVRS/XR_GVRS deprecation warning at most once.
+var warnDeprecatedGVRsOnce sync.Once
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -62,16 +68,18 @@ func run() error {
 		return err
 	}
 
+	targets := cfg.SnapshotPollTargets()
 	slog.Info("configuration loaded",
-		"claim_gvrs", formatGVRs(cfg.ClaimGVRs),
-		"xr_gvrs", formatGVRs(cfg.XRGVRs),
-		"mr_gvrs", formatGVRs(cfg.MRGVRs),
+		"claim_gvrs", formatGVRs(targets.ClaimGVRs),
+		"xr_gvrs", formatGVRs(targets.XRGVRs),
+		"mr_gvrs", formatGVRs(targets.MRGVRs),
 		"namespaces", cfg.Namespaces,
 		"creator_annotation", cfg.CreatorAnnotationKey,
 		"team_annotation", cfg.TeamAnnotationKey,
 		"composition_label", cfg.CompositionLabelKey,
 		"composite_label", cfg.CompositeLabelKey,
 		"poll_interval_seconds", cfg.PollIntervalSeconds,
+		"discovery_interval_seconds", cfg.DiscoveryIntervalSeconds,
 		"metrics_addr", cfg.MetricsAddr,
 		"store_backend", cfg.StoreBackend,
 	)
@@ -113,6 +121,13 @@ func run() error {
 		poller.Run(ctx)
 	}()
 
+	// Periodic XRD/MRD re-discovery so new types appear without a restart.
+	if cfg.DiscoveryIntervalSeconds > 0 {
+		go runDiscoveryRefresh(ctx, client, cfg)
+	} else {
+		slog.Info("periodic GVR re-discovery disabled", "discovery_interval_seconds", 0)
+	}
+
 	// Mark the server as ready only after the first poll cycle completes
 	// (even if some GVR polls errored). This avoids the previous fixed sleep
 	// that could race ahead of a slow first cycle.
@@ -142,7 +157,49 @@ func formatGVRs(gvrs []schema.GroupVersionResource) []string {
 	return out
 }
 
+// runDiscoveryRefresh re-runs XRD/MRD discovery on a fixed interval and swaps
+// the poller's GVR inventory under the config lock. Failures leave the previous
+// inventory in place.
+func runDiscoveryRefresh(ctx context.Context, client dynamic.Interface, cfg *config.Config) {
+	interval := time.Duration(cfg.DiscoveryIntervalSeconds) * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	slog.Info("periodic GVR re-discovery enabled", "discovery_interval_seconds", cfg.DiscoveryIntervalSeconds)
+
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("discovery refresh shutting down")
+			return
+		case <-ticker.C:
+			if err := discoverAndApplyGVRs(ctx, client, cfg); err != nil {
+				slog.Warn("periodic GVR re-discovery failed; keeping previous inventory", "error", err)
+				continue
+			}
+			targets := cfg.SnapshotPollTargets()
+			slog.Info("periodic GVR re-discovery complete",
+				"claim_gvrs", formatGVRs(targets.ClaimGVRs),
+				"xr_gvrs", formatGVRs(targets.XRGVRs),
+				"mr_gvrs", formatGVRs(targets.MRGVRs),
+			)
+		}
+	}
+}
+
 func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *config.Config) error {
+	start := time.Now()
+	err := applyDiscoveredGVRs(ctx, client, cfg)
+	metrics.DiscoveryDuration.Observe(time.Since(start).Seconds())
+	if err != nil {
+		metrics.DiscoveryRuns.WithLabelValues(metrics.DiscoveryResultError).Inc()
+		return err
+	}
+	metrics.DiscoveryRuns.WithLabelValues(metrics.DiscoveryResultSuccess).Inc()
+	return nil
+}
+
+func applyDiscoveredGVRs(ctx context.Context, client dynamic.Interface, cfg *config.Config) error {
 	claimGVRs, xrGVRs, xrScopes, err := kube.DiscoverFromXRD(ctx, client)
 	if err != nil {
 		return fmt.Errorf("discover claim and XR GVRs from XRDs: %w", err)
@@ -151,41 +208,40 @@ func discoverAndApplyGVRs(ctx context.Context, client dynamic.Interface, cfg *co
 		return fmt.Errorf("no XR GVRs discovered from XRDs; ensure Crossplane XRDs exist in the cluster")
 	}
 
-	// Preserve env-configured CLAIM_GVRS / XR_GVRS before applying discovery.
-	// These are deprecated additive overrides merged with XRD discovery.
-	envClaimGVRs := cfg.ClaimGVRs
-	envXRGVRs := cfg.XRGVRs
-	if len(envClaimGVRs) > 0 || len(envXRGVRs) > 0 {
-		slog.Warn("CLAIM_GVRS and/or XR_GVRS are deprecated; values are merged with XRD discovery (deduplicated)",
-			"claim_gvrs", formatGVRs(envClaimGVRs),
-			"xr_gvrs", formatGVRs(envXRGVRs),
-		)
+	if len(cfg.EnvClaimGVRs) > 0 || len(cfg.EnvXRGVRs) > 0 {
+		warnDeprecatedGVRsOnce.Do(func() {
+			slog.Warn("CLAIM_GVRS and/or XR_GVRS are deprecated; values are merged with XRD discovery (deduplicated)",
+				"claim_gvrs", formatGVRs(cfg.EnvClaimGVRs),
+				"xr_gvrs", formatGVRs(cfg.EnvXRGVRs),
+			)
+		})
 	}
-
-	cfg.ClaimGVRs = mergeGVRs(claimGVRs, envClaimGVRs)
-	cfg.XRGVRs = mergeGVRs(xrGVRs, envXRGVRs)
-	cfg.XRGVRSScopes = xrScopes
 
 	mrGVRs, providerNames, mrScopes, err := kube.DiscoverMRGVRsFromMRDs(ctx, client)
 	if err != nil {
 		return fmt.Errorf("discover MR GVRs from managed resource definitions: %w", err)
 	}
-
-	if cfg.MRProviderNames == nil {
-		cfg.MRProviderNames = make(map[string]string)
+	if providerNames == nil {
+		providerNames = make(map[string]string)
 	}
-	if cfg.MRGVRSScopes == nil {
-		cfg.MRGVRSScopes = make(map[string]config.ResourceScope)
+	if mrScopes == nil {
+		mrScopes = make(map[string]config.ResourceScope)
 	}
-	for key, name := range providerNames {
-		cfg.MRProviderNames[key] = name
-	}
-	for key, scope := range mrScopes {
-		cfg.MRGVRSScopes[key] = scope
+	if xrScopes == nil {
+		xrScopes = make(map[string]config.ResourceScope)
 	}
 
-	// Merge env-configured MR_GVRS (additive, deduplicated).
-	cfg.MRGVRs = mergeGVRs(mrGVRs, cfg.MRGVRs)
+	// Merge env overrides with freshly discovered sets (additive, deduplicated).
+	// Env slices are immutable after Load so re-discovery does not accumulate
+	// previously discovered GVRs that have since been removed from the cluster.
+	cfg.ReplaceInventory(config.DiscoveredInventory{
+		ClaimGVRs:       mergeGVRs(claimGVRs, cfg.EnvClaimGVRs),
+		XRGVRs:          mergeGVRs(xrGVRs, cfg.EnvXRGVRs),
+		MRGVRs:          mergeGVRs(mrGVRs, cfg.EnvMRGVRs),
+		XRGVRSScopes:    xrScopes,
+		MRGVRSScopes:    mrScopes,
+		MRProviderNames: providerNames,
+	})
 
 	return nil
 }

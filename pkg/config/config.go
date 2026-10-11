@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -25,7 +26,14 @@ const (
 )
 
 // Config holds all runtime configuration for the exporter.
+//
+// GVR inventory fields (ClaimGVRs, XRGVRs, MRGVRs, and related scope/provider
+// maps) are guarded by mu so periodic XRD/MRD re-discovery can replace them
+// while the poller is running. Use SnapshotPollTargets / ReplaceInventory or
+// the locked accessors rather than reading those fields from another goroutine.
 type Config struct {
+	mu sync.RWMutex
+
 	// ClaimGVRs is the list of claim GroupVersionResources to poll.
 	ClaimGVRs []schema.GroupVersionResource
 
@@ -44,6 +52,18 @@ type Config struct {
 	// MRProviderNames maps GVR key (group/version/resource) to provider package name.
 	MRProviderNames map[string]string
 
+	// EnvClaimGVRs are the CLAIM_GVRS values from the environment. Preserved
+	// across re-discovery so additive merge semantics stay stable.
+	EnvClaimGVRs []schema.GroupVersionResource
+
+	// EnvXRGVRs are the XR_GVRS values from the environment. Preserved across
+	// re-discovery so additive merge semantics stay stable.
+	EnvXRGVRs []schema.GroupVersionResource
+
+	// EnvMRGVRs are the MR_GVRS values from the environment. Preserved across
+	// re-discovery so additive merge semantics stay stable.
+	EnvMRGVRs []schema.GroupVersionResource
+
 	// Namespaces restricts watches to these namespaces. Empty means all.
 	Namespaces []string
 
@@ -61,6 +81,11 @@ type Config struct {
 
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
+
+	// DiscoveryIntervalSeconds is the number of seconds between XRD/MRD
+	// re-discovery cycles. Zero disables periodic re-discovery (startup
+	// discovery still runs once).
+	DiscoveryIntervalSeconds int
 
 	// MetricsAddr is the listen address for the HTTP metrics server.
 	MetricsAddr string
@@ -82,10 +107,28 @@ type Config struct {
 	S3Endpoint string
 }
 
+// PollTargets is a point-in-time copy of the GVR lists used for one poll cycle.
+type PollTargets struct {
+	ClaimGVRs []schema.GroupVersionResource
+	XRGVRs    []schema.GroupVersionResource
+	MRGVRs    []schema.GroupVersionResource
+}
+
+// DiscoveredInventory is a complete GVR inventory ready to install under lock.
+type DiscoveredInventory struct {
+	ClaimGVRs       []schema.GroupVersionResource
+	XRGVRs          []schema.GroupVersionResource
+	MRGVRs          []schema.GroupVersionResource
+	XRGVRSScopes    map[string]ResourceScope
+	MRGVRSScopes    map[string]ResourceScope
+	MRProviderNames map[string]string
+}
+
 const (
 	defaultCompositionLabelKey = "crossplane.io/composition-name"
 	defaultCompositeLabelKey   = "crossplane.io/composite"
 	defaultPollInterval        = 30
+	defaultDiscoveryInterval   = 300
 	defaultMetricsAddr         = ":8080"
 	defaultStoreBackend        = "memory"
 	defaultS3KeyPrefix         = "xp-tracker"
@@ -95,13 +138,14 @@ const (
 // Load reads configuration from environment variables and returns a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		CompositionLabelKey: defaultCompositionLabelKey,
-		CompositeLabelKey:   defaultCompositeLabelKey,
-		PollIntervalSeconds: defaultPollInterval,
-		MetricsAddr:         defaultMetricsAddr,
-		MRProviderNames:     make(map[string]string),
-		XRGVRSScopes:        make(map[string]ResourceScope),
-		MRGVRSScopes:        make(map[string]ResourceScope),
+		CompositionLabelKey:      defaultCompositionLabelKey,
+		CompositeLabelKey:        defaultCompositeLabelKey,
+		PollIntervalSeconds:      defaultPollInterval,
+		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
+		MetricsAddr:              defaultMetricsAddr,
+		MRProviderNames:          make(map[string]string),
+		XRGVRSScopes:             make(map[string]ResourceScope),
+		MRGVRSScopes:             make(map[string]ResourceScope),
 	}
 
 	// Optional: CLAIM_GVRS (deprecated in favour of XRD discovery)
@@ -111,7 +155,8 @@ func Load() (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid CLAIM_GVRS: %w", err)
 		}
-		cfg.ClaimGVRs = claimGVRs
+		cfg.EnvClaimGVRs = claimGVRs
+		cfg.ClaimGVRs = append([]schema.GroupVersionResource(nil), claimGVRs...)
 	}
 
 	// Optional: XR_GVRS (deprecated in favour of XRD discovery)
@@ -121,7 +166,8 @@ func Load() (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid XR_GVRS: %w", err)
 		}
-		cfg.XRGVRs = xrGVRs
+		cfg.EnvXRGVRs = xrGVRs
+		cfg.XRGVRs = append([]schema.GroupVersionResource(nil), xrGVRs...)
 	}
 
 	// Optional: KUBE_NAMESPACE_SCOPE
@@ -145,13 +191,14 @@ func Load() (*Config, error) {
 		cfg.CompositeLabelKey = v
 	}
 
-	// Optional: MR_GVRS (merged with MRD discovery at startup)
+	// Optional: MR_GVRS (merged with MRD discovery at startup and on refresh)
 	if mrRaw := os.Getenv("MR_GVRS"); mrRaw != "" {
 		mrGVRs, err := ParseGVRs(mrRaw)
 		if err != nil {
 			return nil, fmt.Errorf("invalid MR_GVRS: %w", err)
 		}
-		cfg.MRGVRs = mrGVRs
+		cfg.EnvMRGVRs = mrGVRs
+		cfg.MRGVRs = append([]schema.GroupVersionResource(nil), mrGVRs...)
 	}
 
 	// Optional: POLL_INTERVAL_SECONDS
@@ -161,6 +208,15 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("POLL_INTERVAL_SECONDS must be a positive integer, got %q", v)
 		}
 		cfg.PollIntervalSeconds = n
+	}
+
+	// Optional: DISCOVERY_INTERVAL_SECONDS (0 disables periodic re-discovery)
+	if v := os.Getenv("DISCOVERY_INTERVAL_SECONDS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("DISCOVERY_INTERVAL_SECONDS must be a non-negative integer, got %q", v)
+		}
+		cfg.DiscoveryIntervalSeconds = n
 	}
 
 	// Optional: METRICS_ADDR
@@ -206,6 +262,64 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// SnapshotPollTargets returns a copy of the current claim/XR/MR GVR lists for
+// one poll cycle. The copy is safe to iterate without holding mu.
+func (c *Config) SnapshotPollTargets() PollTargets {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return PollTargets{
+		ClaimGVRs: append([]schema.GroupVersionResource(nil), c.ClaimGVRs...),
+		XRGVRs:    append([]schema.GroupVersionResource(nil), c.XRGVRs...),
+		MRGVRs:    append([]schema.GroupVersionResource(nil), c.MRGVRs...),
+	}
+}
+
+// ReplaceInventory atomically replaces the discovered GVR inventory.
+func (c *Config) ReplaceInventory(inv DiscoveredInventory) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ClaimGVRs = inv.ClaimGVRs
+	c.XRGVRs = inv.XRGVRs
+	c.MRGVRs = inv.MRGVRs
+	c.XRGVRSScopes = inv.XRGVRSScopes
+	c.MRGVRSScopes = inv.MRGVRSScopes
+	c.MRProviderNames = inv.MRProviderNames
+}
+
+// IsNamespacedXR reports whether the XR GVR is namespace-scoped.
+func (c *Config) IsNamespacedXR(gvr schema.GroupVersionResource) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.XRGVRSScopes[gvrKey(gvr)] == ResourceScopeNamespaced
+}
+
+// IsNamespacedMR reports whether the MR GVR is namespace-scoped.
+func (c *Config) IsNamespacedMR(gvr schema.GroupVersionResource) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.MRGVRSScopes[gvrKey(gvr)] == ResourceScopeNamespaced
+}
+
+// MRProvider returns the provider package name for an MR GVR key, if known.
+func (c *Config) MRProvider(gvrKey string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.MRProviderNames[gvrKey]
+}
+
+// XRSupportsClaims reports whether an XR GVR is expected to have claims
+// (LegacyCluster scope, or unknown scope for backwards compatibility).
+func (c *Config) XRSupportsClaims(gvr schema.GroupVersionResource) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	scope, known := c.XRGVRSScopes[gvrKey(gvr)]
+	return !known || scope == ResourceScopeLegacyCluster
+}
+
+func gvrKey(gvr schema.GroupVersionResource) string {
+	return gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
 }
 
 // ParseGVRs parses a comma-separated list of GVR strings in the format "group/version/resource".

@@ -15,6 +15,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
 | `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
+| `DISCOVERY_INTERVAL_SECONDS` | No | `300` | Seconds between XRD/MRD re-discovery cycles. `0` disables periodic re-discovery (startup discovery still runs once) |
 | `METRICS_ADDR` | No | `:8080` | Listen address for the HTTP metrics server |
 | `STORE_BACKEND` | No | `memory` | Persistent store backend: `memory` or `s3` |
 | `S3_BUCKET` | When `s3` | `""` | S3 bucket name |
@@ -24,18 +25,20 @@ All xp-tracker configuration is via environment variables. There are no config f
 
 ## XRD discovery
 
-xp-tracker discovers claim and XR GVRs from Crossplane v1 and v2 `CompositeResourceDefinition` (XRD) objects at startup. The exporter derives:
+xp-tracker discovers claim and XR GVRs from Crossplane v1 and v2 `CompositeResourceDefinition` (XRD) objects at startup and, by default, again every `DISCOVERY_INTERVAL_SECONDS` (300s). The exporter derives:
 
 1. XR GVR from `spec.group` + selected `spec.versions[].name` + `spec.names.plural`
 2. Claim GVR from `spec.group` + selected `spec.versions[].name` + `spec.claimNames.plural` (when present on a legacy XRD)
 
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version. An XRD's `spec.scope` controls whether its XR is listed across the cluster or in each selected namespace. Crossplane v2 defaults XRDs to `Namespaced`; v1 XRDs default to the claim-compatible `LegacyCluster` scope.
 
-Startup requires at least one XR discovered from XRDs. Claims are optional: native Crossplane v2 XRDs do not support them. If `CLAIM_GVRS` or `XR_GVRS` are set, those values are merged into the discovered sets (deduplicated) and a deprecation warning is logged. They do not replace discovery.
+Startup requires at least one XR discovered from XRDs. Claims are optional: native Crossplane v2 XRDs do not support them. If `CLAIM_GVRS` or `XR_GVRS` are set, those values are merged into the discovered sets (deduplicated) and a deprecation warning is logged. They do not replace discovery. The same merge is reapplied on every re-discovery cycle.
+
+Set `DISCOVERY_INTERVAL_SECONDS=0` to disable periodic re-discovery (startup discovery still runs). A failed refresh leaves the previous poll inventory in place and increments `xp_tracker_discovery_runs_total{result="error"}`.
 
 ## Provider MR discovery
 
-xp-tracker discovers provider Managed Resource (MR) GVRs from Crossplane `ManagedResourceDefinition` objects at startup. The exporter:
+xp-tracker discovers provider Managed Resource (MR) GVRs from Crossplane `ManagedResourceDefinition` objects at startup and on each re-discovery cycle. The exporter:
 
 1. Lists `managedresourcedefinitions.apiextensions.crossplane.io/v1alpha1`
 2. Keeps only MRDs with `spec.state: Active` (types with a live CRD)
@@ -43,7 +46,7 @@ xp-tracker discovers provider Managed Resource (MR) GVRs from Crossplane `Manage
 4. Attributes the provider package from `pkg.crossplane.io/package` or a `Provider` owner reference
 5. Merges any additional GVRs from `MR_GVRS` (deduplicated)
 
-If an Active MRD's spec cannot yield a GVR (for example, no version with `storage: true` or `served: true`), that MRD is skipped with a warning and counted in `xp_tracker_mrd_discovery_skipped_total` rather than failing startup. A known cause is truncated MRDs written by the Crossplane package establisher ([crossplane/crossplane#7817](https://github.com/crossplane/crossplane/issues/7817)); repair the cluster object (or upgrade Crossplane once the fix lands) so the missing MR type is tracked again.
+If an Active MRD's spec cannot yield a GVR (for example, no version with `storage: true` or `served: true`), that MRD is skipped with a warning and counted in `xp_tracker_mrd_discovery_skipped_total` rather than failing discovery. A known cause is truncated MRDs written by the Crossplane package establisher ([crossplane/crossplane#7817](https://github.com/crossplane/crossplane/issues/7817)); repair the cluster object (or upgrade Crossplane once the fix lands) so the missing MR type is tracked again.
 
 During polling, only MRs with the composite label (`crossplane.io/composite` by default) are tracked. Claim linkage is enriched from MR claim labels or the backing XR when a legacy claim exists. Namespaced v2 MRs are matched to an XR in the same namespace.
 

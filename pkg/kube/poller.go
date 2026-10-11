@@ -80,17 +80,21 @@ func (p *Poller) poll(ctx context.Context) {
 	slog.Debug("polling cycle started")
 	start := time.Now()
 
+	// Snapshot GVR lists so re-discovery can replace inventory mid-cycle
+	// without races or holding the config lock across API calls.
+	targets := p.cfg.SnapshotPollTargets()
+
 	var hadErrors bool
 
 	// Poll XRs first so composition and claim linkage are available for enrichment.
-	for _, gvr := range p.cfg.XRGVRs {
+	for _, gvr := range targets.XRGVRs {
 		if err := p.pollXRs(ctx, gvr); err != nil {
 			hadErrors = true
 			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
 		}
 	}
 
-	for _, gvr := range p.cfg.ClaimGVRs {
+	for _, gvr := range targets.ClaimGVRs {
 		if err := p.pollClaims(ctx, gvr); err != nil {
 			hadErrors = true
 			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
@@ -100,7 +104,7 @@ func (p *Poller) poll(ctx context.Context) {
 	// MR polling is fan-out: there can be 1000+ GVRs (one per provider resource
 	// type). Sequential listing would take minutes; a bounded worker pool keeps
 	// it to seconds without flooding the API server.
-	if mrErrors := p.pollMRsConcurrent(ctx); mrErrors {
+	if mrErrors := p.pollMRsConcurrent(ctx, targets.MRGVRs); mrErrors {
 		hadErrors = true
 	}
 
@@ -184,7 +188,7 @@ func (p *Poller) pollXRs(ctx context.Context, gvr schema.GroupVersionResource) e
 	namespaces := p.cfg.Namespaces
 	var allXRs []store.XRInfo
 
-	if !p.isNamespacedXR(gvr) || len(namespaces) == 0 {
+	if !p.cfg.IsNamespacedXR(gvr) || len(namespaces) == 0 {
 		xrs, err := p.listXRs(ctx, gvr, "")
 		if err != nil {
 			slog.Error("failed to list XRs", "gvr", gvrStr, "error", err)
@@ -214,10 +218,10 @@ func (p *Poller) pollXRs(ctx context.Context, gvr schema.GroupVersionResource) e
 	return nil
 }
 
-// pollMRsConcurrent fans out MR polling across all configured GVRs using a
+// pollMRsConcurrent fans out MR polling across the given GVRs using a
 // bounded worker pool. It returns true if any GVR produced an error.
-func (p *Poller) pollMRsConcurrent(ctx context.Context) (hadErrors bool) {
-	if len(p.cfg.MRGVRs) == 0 {
+func (p *Poller) pollMRsConcurrent(ctx context.Context, mrGVRs []schema.GroupVersionResource) (hadErrors bool) {
+	if len(mrGVRs) == 0 {
 		return false
 	}
 
@@ -226,7 +230,7 @@ func (p *Poller) pollMRsConcurrent(ctx context.Context) (hadErrors bool) {
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(mrPollConcurrency)
 
-	for _, gvr := range p.cfg.MRGVRs {
+	for _, gvr := range mrGVRs {
 		gvr := gvr // capture loop variable (pre-Go 1.22)
 		g.Go(func() error {
 			if err := p.pollMRs(ctx, gvr); err != nil {
@@ -247,12 +251,12 @@ func (p *Poller) pollMRsConcurrent(ctx context.Context) (hadErrors bool) {
 // pollMRs lists claim-linked MRs for a given GVR and updates the store.
 func (p *Poller) pollMRs(ctx context.Context, gvr schema.GroupVersionResource) error {
 	gvrStr := GVRString(gvr)
-	provider := p.cfg.MRProviderNames[gvrStr]
+	provider := p.cfg.MRProvider(gvrStr)
 
 	namespaces := p.cfg.Namespaces
 	var allMRs []store.MRInfo
 
-	if !p.isNamespacedMR(gvr) || len(namespaces) == 0 {
+	if !p.cfg.IsNamespacedMR(gvr) || len(namespaces) == 0 {
 		mrs, err := p.listMRs(ctx, gvr, "", provider)
 		if err != nil {
 			slog.Error("failed to list MRs", "gvr", gvrStr, "error", err)
@@ -320,14 +324,6 @@ func (p *Poller) listMRs(ctx context.Context, gvr schema.GroupVersionResource, n
 		}
 	}
 	return mrs, nil
-}
-
-func (p *Poller) isNamespacedXR(gvr schema.GroupVersionResource) bool {
-	return p.cfg.XRGVRSScopes[GVRString(gvr)] == config.ResourceScopeNamespaced
-}
-
-func (p *Poller) isNamespacedMR(gvr schema.GroupVersionResource) bool {
-	return p.cfg.MRGVRSScopes[GVRString(gvr)] == config.ResourceScopeNamespaced
 }
 
 // listClaims lists claims for a specific GVR and optional namespace.

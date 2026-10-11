@@ -110,24 +110,32 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PollIntervalSeconds != 30 {
 		t.Errorf("expected default poll interval 30, got %d", cfg.PollIntervalSeconds)
 	}
+	if cfg.DiscoveryIntervalSeconds != 300 {
+		t.Errorf("expected default discovery interval 300, got %d", cfg.DiscoveryIntervalSeconds)
+	}
 	if cfg.MetricsAddr != ":8080" {
 		t.Errorf("expected default metrics addr :8080, got %s", cfg.MetricsAddr)
 	}
 	if len(cfg.Namespaces) != 0 {
 		t.Errorf("expected no namespaces, got %v", cfg.Namespaces)
 	}
+	if len(cfg.EnvClaimGVRs) != 1 || len(cfg.EnvXRGVRs) != 1 {
+		t.Errorf("expected env GVR overrides to be captured, got claims=%d xrs=%d",
+			len(cfg.EnvClaimGVRs), len(cfg.EnvXRGVRs))
+	}
 }
 
 func TestLoad_AllOptions(t *testing.T) {
 	setEnvs(t, map[string]string{
-		"CLAIM_GVRS":             "platform.example.org/v1alpha1/postgresqlinstances",
-		"XR_GVRS":                "platform.example.org/v1alpha1/xpostgresqlinstances",
-		"KUBE_NAMESPACE_SCOPE":   "team-a, team-b",
-		"CREATOR_ANNOTATION_KEY": "platform.example.org/creator",
-		"TEAM_ANNOTATION_KEY":    "platform.example.org/team",
-		"COMPOSITION_LABEL_KEY":  "custom.io/comp",
-		"POLL_INTERVAL_SECONDS":  "15",
-		"METRICS_ADDR":           ":9090",
+		"CLAIM_GVRS":                 "platform.example.org/v1alpha1/postgresqlinstances",
+		"XR_GVRS":                    "platform.example.org/v1alpha1/xpostgresqlinstances",
+		"KUBE_NAMESPACE_SCOPE":       "team-a, team-b",
+		"CREATOR_ANNOTATION_KEY":     "platform.example.org/creator",
+		"TEAM_ANNOTATION_KEY":        "platform.example.org/team",
+		"COMPOSITION_LABEL_KEY":      "custom.io/comp",
+		"POLL_INTERVAL_SECONDS":      "15",
+		"DISCOVERY_INTERVAL_SECONDS": "60",
+		"METRICS_ADDR":               ":9090",
 	})
 
 	cfg, err := Load()
@@ -150,8 +158,73 @@ func TestLoad_AllOptions(t *testing.T) {
 	if cfg.PollIntervalSeconds != 15 {
 		t.Errorf("unexpected poll interval: %d", cfg.PollIntervalSeconds)
 	}
+	if cfg.DiscoveryIntervalSeconds != 60 {
+		t.Errorf("unexpected discovery interval: %d", cfg.DiscoveryIntervalSeconds)
+	}
 	if cfg.MetricsAddr != ":9090" {
 		t.Errorf("unexpected metrics addr: %s", cfg.MetricsAddr)
+	}
+}
+
+func TestLoad_DiscoveryIntervalZeroDisables(t *testing.T) {
+	setEnvs(t, map[string]string{
+		"DISCOVERY_INTERVAL_SECONDS": "0",
+	})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DiscoveryIntervalSeconds != 0 {
+		t.Errorf("expected discovery interval 0 (disabled), got %d", cfg.DiscoveryIntervalSeconds)
+	}
+}
+
+func TestLoad_InvalidDiscoveryInterval(t *testing.T) {
+	setEnvs(t, map[string]string{
+		"DISCOVERY_INTERVAL_SECONDS": "-1",
+	})
+
+	if _, err := Load(); err == nil {
+		t.Error("expected error for negative DISCOVERY_INTERVAL_SECONDS")
+	}
+}
+
+func TestSnapshotAndReplaceInventory(t *testing.T) {
+	cfg := &Config{
+		ClaimGVRs: []schema.GroupVersionResource{
+			{Group: "g", Version: "v1", Resource: "claims"},
+		},
+		XRGVRs: []schema.GroupVersionResource{
+			{Group: "g", Version: "v1", Resource: "xrs"},
+		},
+	}
+
+	snap := cfg.SnapshotPollTargets()
+	if len(snap.ClaimGVRs) != 1 || len(snap.XRGVRs) != 1 {
+		t.Fatalf("unexpected snapshot: %+v", snap)
+	}
+
+	cfg.ReplaceInventory(DiscoveredInventory{
+		ClaimGVRs: []schema.GroupVersionResource{
+			{Group: "g", Version: "v1", Resource: "claims"},
+			{Group: "g", Version: "v1", Resource: "moreclaims"},
+		},
+		XRGVRs: []schema.GroupVersionResource{
+			{Group: "g", Version: "v1", Resource: "xrs"},
+			{Group: "g", Version: "v1", Resource: "morexrs"},
+		},
+		XRGVRSScopes:    map[string]ResourceScope{"g/v1/morexrs": ResourceScopeNamespaced},
+		MRGVRSScopes:    map[string]ResourceScope{},
+		MRProviderNames: map[string]string{},
+	})
+
+	snap = cfg.SnapshotPollTargets()
+	if len(snap.ClaimGVRs) != 2 || len(snap.XRGVRs) != 2 {
+		t.Fatalf("unexpected inventory after replace: %+v", snap)
+	}
+	if !cfg.IsNamespacedXR(schema.GroupVersionResource{Group: "g", Version: "v1", Resource: "morexrs"}) {
+		t.Error("expected morexrs to be namespaced after replace")
 	}
 }
 
@@ -287,9 +360,10 @@ func TestLoad_StoreBackendInvalid(t *testing.T) {
 func setEnvs(t *testing.T, envs map[string]string) {
 	t.Helper()
 	keys := []string{
-		"CLAIM_GVRS", "XR_GVRS", "KUBE_NAMESPACE_SCOPE",
+		"CLAIM_GVRS", "XR_GVRS", "MR_GVRS", "KUBE_NAMESPACE_SCOPE",
 		"CREATOR_ANNOTATION_KEY", "TEAM_ANNOTATION_KEY",
-		"COMPOSITION_LABEL_KEY", "POLL_INTERVAL_SECONDS", "METRICS_ADDR",
+		"COMPOSITION_LABEL_KEY", "COMPOSITE_LABEL_KEY",
+		"POLL_INTERVAL_SECONDS", "DISCOVERY_INTERVAL_SECONDS", "METRICS_ADDR",
 		"STORE_BACKEND", "S3_BUCKET", "S3_KEY_PREFIX", "S3_REGION", "S3_ENDPOINT",
 	}
 	for _, k := range keys {
