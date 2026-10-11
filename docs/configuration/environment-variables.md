@@ -134,5 +134,6 @@ data:
   CREATOR_ANNOTATION_KEY: "platform.example.org/created-by"
   TEAM_ANNOTATION_KEY: "platform.example.org/team"
   POLL_INTERVAL_SECONDS: "30"
+  # DISCOVERY_INTERVAL_SECONDS: "300"  # 0 disables periodic re-discovery
   METRICS_ADDR: ":8080"
 ```
