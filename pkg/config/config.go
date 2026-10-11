@@ -90,6 +90,10 @@ type Config struct {
 	// MetricsAddr is the listen address for the HTTP metrics server.
 	MetricsAddr string
 
+	// LogLevel is the slog level for structured logging.
+	// Valid values: debug, info, warn, error. Default: info.
+	LogLevel slog.Level
+
 	// StoreBackend selects the persistent store backend.
 	// Valid values: "memory" (default, no persistence), "s3".
 	StoreBackend string
@@ -130,6 +134,7 @@ const (
 	defaultPollInterval        = 30
 	defaultDiscoveryInterval   = 300
 	defaultMetricsAddr         = ":8080"
+	defaultLogLevel            = "info"
 	defaultStoreBackend        = "memory"
 	defaultS3KeyPrefix         = "xp-tracker"
 	defaultS3Region            = "us-east-1"
@@ -143,6 +148,7 @@ func Load() (*Config, error) {
 		PollIntervalSeconds:      defaultPollInterval,
 		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
 		MetricsAddr:              defaultMetricsAddr,
+		LogLevel:                 slog.LevelInfo,
 		MRProviderNames:          make(map[string]string),
 		XRGVRSScopes:             make(map[string]ResourceScope),
 		MRGVRSScopes:             make(map[string]ResourceScope),
@@ -223,6 +229,17 @@ func Load() (*Config, error) {
 	if v := os.Getenv("METRICS_ADDR"); v != "" {
 		cfg.MetricsAddr = v
 	}
+
+	// Optional: LOG_LEVEL (debug|info|warn|error)
+	logLevelRaw := os.Getenv("LOG_LEVEL")
+	if logLevelRaw == "" {
+		logLevelRaw = defaultLogLevel
+	}
+	level, err := ParseLogLevel(logLevelRaw)
+	if err != nil {
+		return nil, err
+	}
+	cfg.LogLevel = level
 
 	// Optional: STORE_BACKEND
 	cfg.StoreBackend = defaultStoreBackend
@@ -320,6 +337,23 @@ func (c *Config) XRSupportsClaims(gvr schema.GroupVersionResource) bool {
 
 func gvrKey(gvr schema.GroupVersionResource) string {
 	return gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+}
+
+// ParseLogLevel maps a case-insensitive level name to slog.Level.
+// Accepted values: debug, info, warn (or warning), error.
+func ParseLogLevel(raw string) (slog.Level, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return 0, fmt.Errorf("LOG_LEVEL must be one of debug, info, warn, error; got %q", raw)
+	}
 }
 
 // ParseGVRs parses a comma-separated list of GVR strings in the format "group/version/resource".

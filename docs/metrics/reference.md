@@ -1,6 +1,6 @@
 # Metrics Reference
 
-xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resources, plus nine **self-monitoring** metrics for operational visibility.
+xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resources, plus eleven **self-monitoring** metrics for operational visibility.
 
 ## Claim metrics
 
@@ -177,6 +177,10 @@ Histogram tracking the duration of each poll cycle (all GVRs combined).
 
 Counter of per-GVR poll errors. Incremented each time a List call for a specific GVR fails.
 
+### `xp_tracker_last_successful_poll_timestamp_seconds`
+
+Unix timestamp (seconds) of the most recent poll cycle that completed with **no** per-GVR List errors. Remains `0` until the first fully successful cycle. Partial failures leave the previous value unchanged so freshness alerts can detect sustained poll problems. See [`prometheus-alerts.md`](prometheus-alerts.md) for `XpTrackerPollStale`.
+
 ### `xp_tracker_store_claims`
 
 Gauge showing the current number of claims in the in-memory store, updated after each poll.
@@ -225,6 +229,9 @@ rate(xp_tracker_poll_duration_seconds_sum[5m]) / rate(xp_tracker_poll_duration_s
 
 # Poll error rate
 rate(xp_tracker_poll_errors_total[5m])
+
+# Seconds since last fully successful poll
+time() - xp_tracker_last_successful_poll_timestamp_seconds
 
 # Current store size
 xp_tracker_store_claims + xp_tracker_store_xrs

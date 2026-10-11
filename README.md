@@ -184,6 +184,7 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | no | `300` | Seconds between XRD/MRD re-discovery cycles; `0` disables periodic re-discovery |
 | `METRICS_ADDR` | no | `:8080` | Listen address for HTTP metrics |
+| `LOG_LEVEL` | no | `info` | Structured log level: `debug`, `info`, `warn`, or `error` |
 | `STORE_BACKEND` | no | `memory` | Persistent store backend: `memory` or `s3` |
 | `S3_BUCKET` | when `s3` | `""` | S3 bucket name |
 | `S3_KEY_PREFIX` | no | `xp-tracker` | S3 key prefix for snapshot file |
@@ -458,6 +459,9 @@ increase(xp_tracker_poll_errors_total[10m]) > 0
 # Poll duration p99 too high (tune threshold for your poll interval)
 histogram_quantile(0.99, sum by (le) (rate(xp_tracker_poll_duration_seconds_bucket[15m]))) > 20
 
+# No fully successful poll recently (tune 90s ≈ 3× POLL_INTERVAL_SECONDS)
+(time() - xp_tracker_last_successful_poll_timestamp_seconds) > 90
+
 # Claim readiness ratio degraded
 (sum(crossplane_claims_ready) / sum(crossplane_claims_total)) < 0.8
 
@@ -710,6 +714,7 @@ xp-tracker also exposes metrics about its own operation under the `xp_tracker_` 
 |---|---|---|
 | `xp_tracker_poll_duration_seconds` | Histogram | Duration of each poll cycle |
 | `xp_tracker_poll_errors_total` | Counter | Total number of per-GVR poll errors |
+| `xp_tracker_last_successful_poll_timestamp_seconds` | Gauge | Unix timestamp of the last poll cycle with no GVR errors |
 | `xp_tracker_store_claims` | Gauge | Current number of claims in the store |
 | `xp_tracker_store_xrs` | Gauge | Current number of XRs in the store |
 | `xp_tracker_s3_persist_duration_seconds` | Histogram | Duration of each S3 persist operation |

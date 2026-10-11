@@ -20,16 +20,17 @@ func TestRegisterSelfMetrics(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"xp_tracker_poll_duration_seconds":       false,
-		"xp_tracker_poll_errors_total":           false,
-		"xp_tracker_store_claims":                false,
-		"xp_tracker_store_xrs":                   false,
-		"xp_tracker_store_mrs":                   false,
-		"xp_tracker_s3_persist_duration_seconds": false,
-		"xp_tracker_mrd_discovery_skipped_total": false,
-		"xp_tracker_xrd_discovery_skipped_total": false,
-		"xp_tracker_discovery_runs_total":        false,
-		"xp_tracker_discovery_duration_seconds":  false,
+		"xp_tracker_poll_duration_seconds":                  false,
+		"xp_tracker_poll_errors_total":                      false,
+		"xp_tracker_last_successful_poll_timestamp_seconds": false,
+		"xp_tracker_store_claims":                           false,
+		"xp_tracker_store_xrs":                              false,
+		"xp_tracker_store_mrs":                              false,
+		"xp_tracker_s3_persist_duration_seconds":            false,
+		"xp_tracker_mrd_discovery_skipped_total":            false,
+		"xp_tracker_xrd_discovery_skipped_total":            false,
+		"xp_tracker_discovery_runs_total":                   false,
+		"xp_tracker_discovery_duration_seconds":             false,
 	}
 
 	for _, fam := range families {
@@ -53,6 +54,7 @@ func TestSelfMetricsUpdate(t *testing.T) {
 
 	StoreClaims.Set(42)
 	StoreXRs.Set(7)
+	LastSuccessfulPollTimestamp.Set(1_700_000_000)
 	PollDuration.Observe(1.5)
 	PollErrors.WithLabelValues("test.example.com/v1/widgets").Inc()
 	S3PersistDuration.Observe(0.25)
@@ -70,6 +72,8 @@ func TestSelfMetricsUpdate(t *testing.T) {
 			gauges["claims"] = fam.GetMetric()[0].GetGauge().GetValue()
 		case "xp_tracker_store_xrs":
 			gauges["xrs"] = fam.GetMetric()[0].GetGauge().GetValue()
+		case "xp_tracker_last_successful_poll_timestamp_seconds":
+			gauges["last_success"] = fam.GetMetric()[0].GetGauge().GetValue()
 		}
 	}
 
@@ -78,5 +82,8 @@ func TestSelfMetricsUpdate(t *testing.T) {
 	}
 	if got := gauges["xrs"]; got != 7 {
 		t.Errorf("store_xrs = %v, want 7", got)
+	}
+	if got := gauges["last_success"]; got != 1_700_000_000 {
+		t.Errorf("last_successful_poll_timestamp_seconds = %v, want 1700000000", got)
 	}
 }

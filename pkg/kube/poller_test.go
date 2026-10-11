@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,6 +16,7 @@ import (
 	clienttesting "k8s.io/client-go/testing"
 
 	"github.com/kanzifucius/xp-tracker/pkg/config"
+	"github.com/kanzifucius/xp-tracker/pkg/metrics"
 	"github.com/kanzifucius/xp-tracker/pkg/store"
 )
 
@@ -600,4 +602,50 @@ func TestPoller_FirstPollDoneAfterPollCompletes(t *testing.T) {
 	// Clear the blocking reactor before a second cycle.
 	client.ReactionChain = client.ReactionChain[1:]
 	poller.poll(context.Background())
+}
+
+func TestPoller_LastSuccessfulPollTimestamp(t *testing.T) {
+	xrGVR := schema.GroupVersionResource{
+		Group: "platform.example.org", Version: "v1alpha1", Resource: "xpostgresqlinstances",
+	}
+
+	xr := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "platform.example.org/v1alpha1",
+			"kind":       "XPostgreSQLInstance",
+			"metadata": map[string]interface{}{
+				"name": "xr-ok",
+			},
+		},
+	}
+
+	client := newFakeClient(map[schema.GroupVersionResource]string{
+		xrGVR: "XPostgreSQLInstanceList",
+	}, xr)
+
+	cfg := &config.Config{
+		XRGVRs:              []schema.GroupVersionResource{xrGVR},
+		PollIntervalSeconds: 30,
+	}
+	s := store.New()
+	poller := NewPoller(client, cfg, s)
+
+	metrics.LastSuccessfulPollTimestamp.Set(0)
+	before := time.Now().Unix()
+	poller.poll(context.Background())
+	got := testutil.ToFloat64(metrics.LastSuccessfulPollTimestamp)
+	after := time.Now().Unix()
+
+	if got < float64(before) || got > float64(after) {
+		t.Fatalf("successful poll timestamp = %v, want in [%d, %d]", got, before, after)
+	}
+
+	// A failing cycle must leave the previous successful timestamp unchanged.
+	client.PrependReactor("list", "*", func(action clienttesting.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("forced list failure")
+	})
+	poller.poll(context.Background())
+	if still := testutil.ToFloat64(metrics.LastSuccessfulPollTimestamp); still != got {
+		t.Fatalf("failed poll changed timestamp: got %v, want %v", still, got)
+	}
 }

@@ -22,6 +22,14 @@ var (
 		Help: "Total number of polling errors, partitioned by GVR.",
 	}, []string{"gvr"})
 
+	// LastSuccessfulPollTimestamp is the Unix timestamp of the most recent
+	// poll cycle that completed with no per-GVR poll errors. Remains 0 until
+	// the first fully successful cycle; suitable for freshness alerts.
+	LastSuccessfulPollTimestamp = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "xp_tracker_last_successful_poll_timestamp_seconds",
+		Help: "Unix timestamp of the last poll cycle that completed with no GVR errors.",
+	})
+
 	// StoreClaims reports the number of claims currently held in the store.
 	StoreClaims = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "xp_tracker_store_claims",
@@ -114,6 +122,7 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(
 		PollDuration,
 		PollErrors,
+		LastSuccessfulPollTimestamp,
 		StoreClaims,
 		StoreXRs,
 		StoreMRs,

@@ -32,8 +32,20 @@ var (
 var warnDeprecatedGVRsOnce sync.Once
 
 func main() {
+	// Resolve LOG_LEVEL before constructing the handler so early startup
+	// messages honour the configured verbosity.
+	logLevelRaw := os.Getenv("LOG_LEVEL")
+	if logLevelRaw == "" {
+		logLevelRaw = "info"
+	}
+	level, err := config.ParseLogLevel(logLevelRaw)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid LOG_LEVEL: %v\n", err)
+		os.Exit(1)
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: level,
 	}))
 	slog.SetDefault(logger)
 
@@ -41,6 +53,7 @@ func main() {
 		"version", version,
 		"commit", commit,
 		"date", date,
+		"log_level", logLevelRaw,
 	)
 
 	if err := run(); err != nil {
@@ -81,6 +94,7 @@ func run() error {
 		"poll_interval_seconds", cfg.PollIntervalSeconds,
 		"discovery_interval_seconds", cfg.DiscoveryIntervalSeconds,
 		"metrics_addr", cfg.MetricsAddr,
+		"log_level", cfg.LogLevel.String(),
 		"store_backend", cfg.StoreBackend,
 	)
 
