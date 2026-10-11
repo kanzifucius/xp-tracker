@@ -46,7 +46,7 @@ make help
 | `make e2e`   | Kind + Crossplane 2.0 e2e (opt-in)       |
 | `make e2e-assert` | Assert a running exporter on `:8080` |
 
-CI also runs `govulncheck ./...` and uploads a `coverage.out` artefact from the test job. There is no hard coverage floor yet.
+CI also runs `govulncheck ./...` (soft-gated with `continue-on-error` until the Go toolchain moves past 1.25.5) and uploads a `coverage.out` artefact from the test job. There is no hard coverage floor yet.
 
 ## Making Changes
 
