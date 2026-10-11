@@ -169,12 +169,12 @@ The snapshot is a single JSON file at `s3://<bucket>/<prefix>/snapshot.json`, ov
 ## Configuration
 
 xp-tracker discovers XR GVRs from Crossplane v1 and v2 `CompositeResourceDefinition` objects, derives legacy claim GVRs where `claimNames` is present, and discovers provider MR GVRs from Active `ManagedResourceDefinition` objects at startup.
-Environment variables are still used for namespace filtering, annotation/label keys, polling cadence, server address, and optional static GVR overrides.
+Environment variables are still used for namespace filtering, annotation/label keys, polling cadence, server address, and optional additive GVR overrides.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `CLAIM_GVRS` | no (deprecated) | `""` | Optional static claim GVR override (`group/version/resource`) |
-| `XR_GVRS` | no (deprecated) | `""` | Optional static XR GVR override |
+| `CLAIM_GVRS` | no (deprecated) | `""` | Optional additional claim GVRs (`group/version/resource`), merged with XRD discovery |
+| `XR_GVRS` | no (deprecated) | `""` | Optional additional XR GVRs (`group/version/resource`), merged with XRD discovery |
 | `KUBE_NAMESPACE_SCOPE` | no | `""` (all) | Comma-separated namespace filter |
 | `CREATOR_ANNOTATION_KEY` | no | `""` | Annotation key for claim creator |
 | `TEAM_ANNOTATION_KEY` | no | `""` | Annotation key for claim team |
@@ -198,15 +198,15 @@ At startup, xp-tracker lists XRDs from `apiextensions.crossplane.io/v1` and `api
 
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
 
-If no XR GVRs can be discovered from XRDs, startup fails with a clear error. Claims are optional because native Crossplane v2 XRDs do not support them.
+If no XR GVRs can be discovered from XRDs, startup fails with a clear error. Claims are optional because native Crossplane v2 XRDs do not support them. Deprecated `CLAIM_GVRS` / `XR_GVRS` values are merged into the discovered sets (deduplicated) and do not replace discovery.
 
 ### Provider MR discovery
 
 At startup, xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`). Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Active MRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_mrd_discovery_skipped_total`) instead of failing startup. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
 
-### Static GVR overrides (deprecated)
+### Additional claim/XR GVRs (deprecated)
 
-Static overrides use `group/version/resource` format. For example:
+`CLAIM_GVRS` and `XR_GVRS` are deprecated additive overrides in `group/version/resource` format. They are merged with XRD discovery (same pattern as `MR_GVRS`). For example:
 
 ```
 CLAIM_GVRS=platform.example.org/v1alpha1/postgresqlinstances,platform.example.org/v1alpha1/kafkatopics
@@ -360,7 +360,7 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       data:
-        # Optional static overrides (deprecated):
+        # Optional additive overrides (deprecated; merged with XRD discovery):
         # CLAIM_GVRS: "myorg.io/v1alpha1/databases,myorg.io/v1alpha1/caches"
         # XR_GVRS: "myorg.io/v1alpha1/xdatabases,myorg.io/v1alpha1/xcaches"
         CREATOR_ANNOTATION_KEY: "myorg.io/created-by"
@@ -671,7 +671,7 @@ make run
 
 - Check the exporter logs for polling errors: `kubectl logs -n crossplane-system deploy/crossplane-metrics-exporter`
 - Verify your XRDs are installed and healthy: `kubectl get compositeresourcedefinitions.apiextensions.crossplane.io`
-- If you use deprecated static overrides, confirm `CLAIM_GVRS` and `XR_GVRS` match your installed CRDs.
+- If you use deprecated additive `CLAIM_GVRS` / `XR_GVRS`, confirm they match installed CRDs; they merge with XRD discovery rather than replacing it.
 - If using `KUBE_NAMESPACE_SCOPE`, ensure the namespaces exist and contain claims
 
 ### Metrics show 0 for ready counts

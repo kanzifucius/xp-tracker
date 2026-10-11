@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -32,15 +33,25 @@ type Poller struct {
 	client dynamic.Interface
 	cfg    *config.Config
 	store  store.Store
+
+	firstPollDone chan struct{}
+	firstPollOnce sync.Once
 }
 
 // NewPoller creates a new Poller.
 func NewPoller(client dynamic.Interface, cfg *config.Config, s store.Store) *Poller {
 	return &Poller{
-		client: client,
-		cfg:    cfg,
-		store:  s,
+		client:        client,
+		cfg:           cfg,
+		store:         s,
+		firstPollDone: make(chan struct{}),
 	}
+}
+
+// FirstPollDone returns a channel that is closed after the first poll cycle
+// completes. Completion is signalled even when some GVR polls errored.
+func (p *Poller) FirstPollDone() <-chan struct{} {
+	return p.firstPollDone
 }
 
 // Run starts the polling loop. It blocks until ctx is cancelled.
@@ -64,6 +75,8 @@ func (p *Poller) Run(ctx context.Context) {
 
 // poll executes a single polling cycle: list all configured GVRs and update the store.
 func (p *Poller) poll(ctx context.Context) {
+	defer p.firstPollOnce.Do(func() { close(p.firstPollDone) })
+
 	slog.Debug("polling cycle started")
 	start := time.Now()
 

@@ -65,8 +65,8 @@ func (s *Server) Addr() string {
 	return s.listener.Addr().String()
 }
 
-// SetReady marks the server as ready. Call this after the first successful
-// polling cycle completes.
+// SetReady marks the server as ready. Call this after the first polling cycle
+// completes (including cycles that had partial GVR errors).
 func (s *Server) SetReady() { s.ready.Store(true) }
 
 // healthzHandler responds with 200 OK if the process is alive.

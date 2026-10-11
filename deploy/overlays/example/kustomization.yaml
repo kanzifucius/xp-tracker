@@ -8,7 +8,8 @@ resources:
 # Override the namespace if your Prometheus Operator watches a different namespace.
 # namespace: monitoring
 
-# Example: patch the ConfigMap to set your actual GVRs.
+# Example: patch the ConfigMap. Claim/XR GVRs come from XRD discovery by default.
+# Optional CLAIM_GVRS / XR_GVRS below are deprecated additive merges (deduplicated).
 patches:
   - target:
       kind: ConfigMap
@@ -19,8 +20,9 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       data:
-        CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances,platform.example.org/v1alpha1/kafkatopics"
-        XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances,platform.example.org/v1alpha1/xkafkatopics"
+        # Optional additive overrides (merged with XRD discovery; do not replace it):
+        # CLAIM_GVRS: "platform.example.org/v1alpha1/postgresqlinstances,platform.example.org/v1alpha1/kafkatopics"
+        # XR_GVRS: "platform.example.org/v1alpha1/xpostgresqlinstances,platform.example.org/v1alpha1/xkafkatopics"
         CREATOR_ANNOTATION_KEY: "platform.example.org/created-by"
         TEAM_ANNOTATION_KEY: "platform.example.org/team"
         POLL_INTERVAL_SECONDS: "60"

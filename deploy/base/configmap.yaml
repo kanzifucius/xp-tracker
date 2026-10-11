@@ -6,10 +6,10 @@ metadata:
     app.kubernetes.io/name: crossplane-metrics-exporter
     app.kubernetes.io/component: exporter
 data:
-  # Optional (deprecated): comma-separated claim GVR override in group/version/resource format.
+  # Optional (deprecated): additional claim GVRs merged with XRD discovery (group/version/resource).
   # CLAIM_GVRS: "example.org/v1alpha1/exampleclaims"
 
-  # Optional (deprecated): comma-separated XR GVR override in group/version/resource format.
+  # Optional (deprecated): additional XR GVRs merged with XRD discovery (group/version/resource).
   # XR_GVRS: "example.org/v1alpha1/examplecomposites"
 
   # Optional: comma-separated namespace filter. Empty means all namespaces.
