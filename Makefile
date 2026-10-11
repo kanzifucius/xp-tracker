@@ -36,6 +36,7 @@ build: ## Build the binary
 run: build ## Build and run locally
 	./bin/$(BINARY)
 
+# CLAIM_GVRS/XR_GVRS are deprecated additive merges with XRD discovery (still required).
 run-local: build ## Build and run locally with sample resource config
 	CLAIM_GVRS=samples.xptracker.dev/v1alpha1/widgets,samples.xptracker.dev/v1alpha1/gadgets \
 	XR_GVRS=samples.xptracker.dev/v1alpha1/xwidgets,samples.xptracker.dev/v1alpha1/xgadgets \
