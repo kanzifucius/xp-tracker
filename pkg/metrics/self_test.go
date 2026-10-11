@@ -27,6 +27,7 @@ func TestRegisterSelfMetrics(t *testing.T) {
 		"xp_tracker_store_mrs":                   false,
 		"xp_tracker_s3_persist_duration_seconds": false,
 		"xp_tracker_mrd_discovery_skipped_total": false,
+		"xp_tracker_xrd_discovery_skipped_total": false,
 		"xp_tracker_discovery_runs_total":        false,
 		"xp_tracker_discovery_duration_seconds":  false,
 	}

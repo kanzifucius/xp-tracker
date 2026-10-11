@@ -87,6 +87,19 @@ spec:
               Check exporter logs for the MRD name and repair the cluster
               object (for example truncated MRDs from crossplane#7817).
 
+        - alert: XpTrackerXRDDiscoverySkipped
+          expr: sum(xp_tracker_xrd_discovery_skipped_total) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: xp-tracker skipped malformed CompositeResourceDefinitions
+            description: |
+              One or more XRDs could not yield a GVR during discovery
+              (see xp_tracker_xrd_discovery_skipped_total by reason).
+              Check exporter logs for the XRD name and repair the cluster
+              object so the missing claim/XR type is tracked again.
+
     - name: xp-tracker-resource-health
       rules:
         - alert: XpTrackerClaimReadinessLow

@@ -201,6 +201,12 @@ Counter of Active `ManagedResourceDefinition` objects skipped during MR GVR disc
 
 A non-zero value usually means malformed cluster state (for example truncated MRDs from [crossplane/crossplane#7817](https://github.com/crossplane/crossplane/issues/7817)); the exporter continues with the remaining MR types.
 
+### `xp_tracker_xrd_discovery_skipped_total`
+
+Counter of `CompositeResourceDefinition` objects skipped during claim/XR GVR discovery because their spec could not yield a usable group/version/resource. Partitioned by `reason` (`missing_group`, `missing_plural`, `missing_versions`, `no_referenceable_or_served_version`, `other`). Known reasons are initialised at 0 so alerts on `> 0` work immediately after scrape.
+
+A non-zero value usually means malformed cluster state; the exporter continues with the remaining XRDs (listing XRDs still fails fatally). If every XRD is skipped, startup still fails with no XR GVRs discovered.
+
 ### `xp_tracker_discovery_runs_total`
 
 Counter of XRD/MRD discovery runs (startup and periodic refresh). Partitioned by `result` (`success` or `error`). Known results are initialised at 0.
@@ -228,6 +234,9 @@ histogram_quantile(0.99, rate(xp_tracker_s3_persist_duration_seconds_bucket[5m])
 
 # MRDs skipped at discovery (cluster data-quality)
 sum(xp_tracker_mrd_discovery_skipped_total)
+
+# XRDs skipped at discovery (cluster data-quality)
+sum(xp_tracker_xrd_discovery_skipped_total)
 
 # Discovery failure rate
 rate(xp_tracker_discovery_runs_total{result="error"}[15m])

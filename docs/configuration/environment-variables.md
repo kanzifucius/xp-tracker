@@ -32,6 +32,8 @@ xp-tracker discovers claim and XR GVRs from Crossplane v1 and v2 `CompositeResou
 
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version. An XRD's `spec.scope` controls whether its XR is listed across the cluster or in each selected namespace. Crossplane v2 defaults XRDs to `Namespaced`; v1 XRDs default to the claim-compatible `LegacyCluster` scope.
 
+If an XRD's spec cannot yield a GVR (for example, no version with `referenceable: true` or `served: true`), that XRD is skipped with a warning and counted in `xp_tracker_xrd_discovery_skipped_total` rather than failing discovery. Listing XRDs still fails fatally.
+
 Startup requires at least one XR discovered from XRDs. Claims are optional: native Crossplane v2 XRDs do not support them. If `CLAIM_GVRS` or `XR_GVRS` are set, those values are merged into the discovered sets (deduplicated) and a deprecation warning is logged. They do not replace discovery. The same merge is reapplied on every re-discovery cycle.
 
 Set `DISCOVERY_INTERVAL_SECONDS=0` to disable periodic re-discovery (startup discovery still runs). A failed refresh leaves the previous poll inventory in place and increments `xp_tracker_discovery_runs_total{result="error"}`.
