@@ -2,6 +2,20 @@
 
 xp-tracker needs **read-only** access to the Crossplane claim, XR, and managed-resource resources it polls, plus XRD and MRD discovery resources.
 
+## Minimum RBAC for discovery and polling
+
+At startup the exporter lists Crossplane discovery APIs, then polls the claim, XR, and MR types those definitions describe. The **minimum** ClusterRole therefore has two parts:
+
+1. **Discovery** — `get`, `list`, and `watch` on:
+   - `compositeresourcedefinitions` in `apiextensions.crossplane.io` (v1 and v2 XRDs)
+   - `managedresourcedefinitions` in `apiextensions.crossplane.io` (provider MR GVRs)
+2. **Polling** — `get`, `list`, and `watch` on every claim, XR, and MR resource plural you expect metrics for (the types discovered from XRDs/MRDs, or any static overrides you still set)
+
+Without the discovery rules the exporter fails at startup (for example with `no XR GVRs discovered from XRDs` or list-forbidden errors on XRDs/MRDs), even if claim/XR plurals are already granted.
+
+!!! tip
+    Include claim plurals when tracking legacy `LegacyCluster` XRDs that define `claimNames`. Include managed-resource plurals (and the MRD discovery rule above) when you want XR-linked MR metrics. Composition is resolved internally and is **not** a separate RBAC or metric dimension.
+
 ## Default ClusterRole
 
 The base Kustomize manifests include a ClusterRole with broad read access:
@@ -18,14 +32,19 @@ rules:
 ```
 
 !!! warning
-    The base ClusterRole is intentionally broad for quick-start convenience. For production, scope it down to only the API groups and resources you actually poll. The base manifest includes a warning comment to this effect.
+    The base ClusterRole is intentionally broad for quick-start convenience. For production, scope it down to the discovery APIs plus only the API groups and resources you actually poll. The base manifest includes a warning comment to this effect; see `deploy/overlays/example/` for a discovery-complete least-privilege patch.
 
 ## Scoping for production
 
-Restrict the ClusterRole to only the specific API groups and resources you need. For example, if you track `postgresqlinstances` and `kafkatopics`:
+Restrict the ClusterRole to discovery plus your platform types. For example, if you track `postgresqlinstances` and `kafkatopics` on `platform.example.org`:
 
 ```yaml
 rules:
+  - apiGroups: ["apiextensions.crossplane.io"]
+    resources:
+      - compositeresourcedefinitions
+      - managedresourcedefinitions
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["platform.example.org"]
     resources:
       - postgresqlinstances
@@ -33,17 +52,11 @@ rules:
       - kafkatopics
       - xkafkatopics
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["apiextensions.crossplane.io"]
-    resources:
-      - compositeresourcedefinitions
-      - managedresourcedefinitions
-    verbs: ["get", "list", "watch"]
 ```
 
-!!! tip
-    Include the discovered XR resources and `compositeresourcedefinitions` for both Crossplane v1 and v2 XRD discovery. Include claim resources only when tracking legacy `LegacyCluster` XRDs, and include managed-resource GVRs plus `managedresourcedefinitions` when tracking MRs.
+Add further `apiGroups` / `resources` entries for each provider MR plural you poll (those GVRs come from Active `ManagedResourceDefinition` objects).
 
-You can override the ClusterRole via a Kustomize patch in your overlay. The example overlay at `deploy/overlays/example/` includes a scoped ClusterRole patch that demonstrates this pattern:
+You can override the ClusterRole via a Kustomize patch in your overlay. The example overlay at `deploy/overlays/example/` includes a scoped ClusterRole patch that demonstrates this pattern, including the discovery rules:
 
 ```yaml
 patches:
@@ -56,10 +69,17 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       rules:
+        - apiGroups: ["apiextensions.crossplane.io"]
+          resources:
+            - compositeresourcedefinitions
+            - managedresourcedefinitions
+          verbs: ["get", "list", "watch"]
         - apiGroups: ["platform.example.org"]
           resources:
             - postgresqlinstances
             - xpostgresqlinstances
+            - kafkatopics
+            - xkafkatopics
           verbs: ["get", "list", "watch"]
 ```
 
