@@ -505,14 +505,16 @@ Runs on every push to `main` and on pull requests:
 1. **Test & Lint** -- `go mod verify`, `go vet`, `golangci-lint`, `go test -race`
 2. **Build & Push** -- Builds a multi-arch container image (`linux/amd64` + `linux/arm64`)
    - On PRs: build only (validates the Dockerfile)
-   - On `main` push: builds and pushes with tags `latest` and `sha-<short>`
+   - On `main` push: builds and pushes with tags `latest` and `sha-<short>`, then
+     generates an SPDX SBOM and attaches Sigstore-backed provenance + SBOM
+     attestations to GHCR (no long-lived signing secrets)
 
 ### Release (`.github/workflows/release.yml`)
 
 Triggered by pushing a semver tag (`v*`):
 
 1. **Test & Lint** -- Same gate as CI
-2. **Build, Push & Release** -- Builds multi-arch image with embedded version info, pushes to GHCR, creates a GitHub Release
+2. **Build, Push & Release** -- Builds multi-arch image with embedded version info, pushes to GHCR, creates a GitHub Release, generates an SPDX SBOM (release asset), and attaches provenance + SBOM attestations
 
 **Image tags produced by a release (e.g. `v1.2.3`):**
 
@@ -523,6 +525,12 @@ Triggered by pushing a semver tag (`v*`):
 | `{{major}}` (if >= 1) | `1` |
 
 Pre-release tags (containing `-rc`, `-alpha`, `-beta`) are marked as pre-releases on GitHub.
+
+### Verifying image attestations
+
+Consumers can verify SLSA provenance and the SPDX SBOM with the GitHub CLI
+(`gh attestation verify`). See [SECURITY.md](SECURITY.md#container-image-provenance-and-sbom)
+for the exact commands.
 
 ### Creating a release
 
@@ -536,6 +544,7 @@ This triggers the release workflow, which:
 - Builds `linux/amd64` + `linux/arm64` images
 - Pushes to `ghcr.io/kanzifucius/xp-tracker:0.1.0` (and `:0.1`)
 - Creates a GitHub Release with auto-generated release notes
+- Attaches an SPDX SBOM and GitHub Artifact Attestations (provenance + SBOM)
 
 ## Local Development
 
