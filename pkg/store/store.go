@@ -70,21 +70,37 @@ type MRInfo struct {
 	DeletedAt          time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
+// PackageInfo holds extracted metadata for a single Crossplane package
+// meta-type (Provider, Configuration, or Function). Package revisions are
+// intentionally excluded — they are high-cardinality and out of scope.
+type PackageInfo struct {
+	GVR       string `json:"gvr"`
+	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Kind      string `json:"kind"` // Provider, Configuration, or Function
+	Name      string `json:"name"`
+	Healthy   bool   `json:"healthy"`   // Healthy condition True
+	Installed bool   `json:"installed"` // Installed condition True
+}
+
 // Store is the interface for Crossplane resource metadata storage.
 // Implementations must be safe for concurrent use.
 type Store interface {
 	ReplaceClaims(gvr string, items []ClaimInfo)
 	ReplaceXRs(gvr string, items []XRInfo)
 	ReplaceMRs(gvr string, items []MRInfo)
+	ReplacePackages(gvr string, items []PackageInfo)
 	EnrichClaimCompositions()
 	EnrichXRClaims()
 	EnrichMRClaims()
 	SnapshotClaims() []ClaimInfo
 	SnapshotXRs() []XRInfo
 	SnapshotMRs() []MRInfo
+	SnapshotPackages() []PackageInfo
 	ClaimCount() int
 	XRCount() int
 	MRCount() int
+	PackageCount() int
 }
 
 // PersistentStore extends Store with durable persistence capabilities.
@@ -100,27 +116,30 @@ type PersistentStore interface {
 // All PersistentStore implementations should use this struct to ensure
 // a consistent format across backends.
 type Snapshot struct {
-	Claims      []ClaimInfo `json:"claims"`
-	XRs         []XRInfo    `json:"xrs"`
-	MRs         []MRInfo    `json:"mrs,omitempty"`
-	PersistedAt time.Time   `json:"persistedAt"`
+	Claims      []ClaimInfo   `json:"claims"`
+	XRs         []XRInfo      `json:"xrs"`
+	MRs         []MRInfo      `json:"mrs,omitempty"`
+	Packages    []PackageInfo `json:"packages,omitempty"`
+	PersistedAt time.Time     `json:"persistedAt"`
 }
 
 // MemoryStore is a thread-safe in-memory implementation of Store.
 // All public methods are safe for concurrent use.
 type MemoryStore struct {
-	mu     sync.RWMutex
-	claims map[string]ClaimInfo // keyed by "namespace/name"
-	xrs    map[string]XRInfo    // keyed by "namespace/name", or "name" when cluster-scoped
-	mrs    map[string]MRInfo    // keyed by "namespace/name"
+	mu       sync.RWMutex
+	claims   map[string]ClaimInfo   // keyed by "namespace/name"
+	xrs      map[string]XRInfo      // keyed by "namespace/name", or "name" when cluster-scoped
+	mrs      map[string]MRInfo      // keyed by "namespace/name"
+	packages map[string]PackageInfo // keyed by kind/name (cluster-scoped)
 }
 
 // New creates a new empty MemoryStore.
 func New() *MemoryStore {
 	return &MemoryStore{
-		claims: make(map[string]ClaimInfo),
-		xrs:    make(map[string]XRInfo),
-		mrs:    make(map[string]MRInfo),
+		claims:   make(map[string]ClaimInfo),
+		xrs:      make(map[string]XRInfo),
+		mrs:      make(map[string]MRInfo),
+		packages: make(map[string]PackageInfo),
 	}
 }
 
@@ -191,6 +210,30 @@ func (s *MemoryStore) ReplaceMRs(gvr string, items []MRInfo) {
 		}
 		if _, ok := newKeys[key]; !ok {
 			delete(s.mrs, key)
+		}
+	}
+}
+
+// ReplacePackages atomically replaces the stored packages for a given GVR.
+// Keys are kind/name so Provider and Function objects with the same metadata
+// name do not collide.
+func (s *MemoryStore) ReplacePackages(gvr string, items []PackageInfo) {
+	newKeys := make(map[string]struct{}, len(items))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, p := range items {
+		key := packageKey(p.Kind, p.Name)
+		newKeys[key] = struct{}{}
+		s.packages[key] = p
+	}
+
+	for key, existing := range s.packages {
+		if existing.GVR != gvr {
+			continue
+		}
+		if _, ok := newKeys[key]; !ok {
+			delete(s.packages, key)
 		}
 	}
 }
@@ -300,6 +343,17 @@ func (s *MemoryStore) SnapshotMRs() []MRInfo {
 	return out
 }
 
+// SnapshotPackages returns a copy of all stored packages.
+func (s *MemoryStore) SnapshotPackages() []PackageInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]PackageInfo, 0, len(s.packages))
+	for _, p := range s.packages {
+		out = append(out, p)
+	}
+	return out
+}
+
 // ClaimCount returns the total number of stored claims.
 func (s *MemoryStore) ClaimCount() int {
 	s.mu.RLock()
@@ -321,6 +375,13 @@ func (s *MemoryStore) MRCount() int {
 	return len(s.mrs)
 }
 
+// PackageCount returns the total number of stored packages.
+func (s *MemoryStore) PackageCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.packages)
+}
+
 // objectKey produces a map key from a namespace and name.
 // For cluster-scoped resources (empty namespace) the key is just the name.
 // For namespaced resources the key is "namespace/name".
@@ -329,4 +390,8 @@ func objectKey(namespace, name string) string {
 		return name
 	}
 	return namespace + "/" + name
+}
+
+func packageKey(kind, name string) string {
+	return kind + "/" + name
 }

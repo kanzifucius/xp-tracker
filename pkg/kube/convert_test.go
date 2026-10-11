@@ -401,6 +401,92 @@ func TestUnstructuredToMR_Full(t *testing.T) {
 	}
 }
 
+func TestUnstructuredToPackage_ProviderHealthyInstalled(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "pkg.crossplane.io", Version: "v1", Resource: "providers"}
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "pkg.crossplane.io/v1",
+			"kind":       "Provider",
+			"metadata": map[string]interface{}{
+				"name": "provider-nop",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{"type": "Installed", "status": "True", "reason": "ActivePackageRevision"},
+					map[string]interface{}{"type": "Healthy", "status": "True", "reason": "HealthyPackageRevision"},
+				},
+			},
+		},
+	}
+
+	pkg := UnstructuredToPackage(*obj, gvr)
+	if pkg.GVR != "pkg.crossplane.io/v1/providers" {
+		t.Errorf("GVR: got %q", pkg.GVR)
+	}
+	if pkg.Kind != "Provider" {
+		t.Errorf("Kind: got %q", pkg.Kind)
+	}
+	if pkg.Name != "provider-nop" {
+		t.Errorf("Name: got %q", pkg.Name)
+	}
+	if !pkg.Healthy {
+		t.Error("expected Healthy=true")
+	}
+	if !pkg.Installed {
+		t.Error("expected Installed=true")
+	}
+}
+
+func TestUnstructuredToPackage_FunctionUnhealthy(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "pkg.crossplane.io", Version: "v1beta1", Resource: "functions"}
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "pkg.crossplane.io/v1beta1",
+			"kind":       "Function",
+			"metadata": map[string]interface{}{
+				"name": "function-patch-and-transform",
+			},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{"type": "Installed", "status": "True"},
+					map[string]interface{}{"type": "Healthy", "status": "False", "reason": "UnhealthyPackageRevision"},
+				},
+			},
+		},
+	}
+
+	pkg := UnstructuredToPackage(*obj, gvr)
+	if pkg.Kind != "Function" {
+		t.Errorf("Kind: got %q", pkg.Kind)
+	}
+	if pkg.Healthy {
+		t.Error("expected Healthy=false")
+	}
+	if !pkg.Installed {
+		t.Error("expected Installed=true")
+	}
+}
+
+func TestUnstructuredToPackage_KindFromResource(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "pkg.crossplane.io", Version: "v1", Resource: "configurations"}
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "pkg.crossplane.io/v1",
+			"metadata": map[string]interface{}{
+				"name": "platform-config",
+			},
+		},
+	}
+
+	pkg := UnstructuredToPackage(*obj, gvr)
+	if pkg.Kind != "Configuration" {
+		t.Errorf("Kind: got %q, want Configuration", pkg.Kind)
+	}
+	if pkg.Healthy || pkg.Installed {
+		t.Error("expected Healthy and Installed false when conditions missing")
+	}
+}
+
 func TestExtractReadyCondition_MultipleConditions(t *testing.T) {
 	obj := map[string]interface{}{
 		"status": map[string]interface{}{

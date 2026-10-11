@@ -22,7 +22,28 @@ import (
 
 func newFakeClient(gvrs map[schema.GroupVersionResource]string, objects ...runtime.Object) *dynamicfake.FakeDynamicClient {
 	scheme := runtime.NewScheme()
-	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrs, objects...)
+	// Poll always lists package meta-types; register their list kinds so the
+	// fake client does not panic when a test focuses on claims/XRs/MRs.
+	merged := make(map[schema.GroupVersionResource]string, len(gvrs)+len(packageGVRs))
+	for gvr, kind := range gvrs {
+		merged[gvr] = kind
+	}
+	for _, gvr := range packageGVRs {
+		if _, ok := merged[gvr]; ok {
+			continue
+		}
+		switch gvr.Resource {
+		case "providers":
+			merged[gvr] = "ProviderList"
+		case "configurations":
+			merged[gvr] = "ConfigurationList"
+		case "functions":
+			merged[gvr] = "FunctionList"
+		default:
+			merged[gvr] = gvr.Resource + "List"
+		}
+	}
+	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, merged, objects...)
 }
 
 func TestPoller_PollClaims(t *testing.T) {
@@ -537,6 +558,74 @@ func TestPoller_V2NamespacedResourcesRespectNamespaceScope(t *testing.T) {
 	mrs := s.SnapshotMRs()
 	if len(mrs) != 1 || mrs[0].Namespace != "team-a" {
 		t.Fatalf("expected only the namespaced team-a MR, got %#v", mrs)
+	}
+}
+
+func TestPoller_PollPackages(t *testing.T) {
+	providerGVR := schema.GroupVersionResource{Group: "pkg.crossplane.io", Version: "v1", Resource: "providers"}
+	functionGVR := schema.GroupVersionResource{Group: "pkg.crossplane.io", Version: "v1beta1", Resource: "functions"}
+	xrGVR := schema.GroupVersionResource{Group: "platform.example.org", Version: "v1alpha1", Resource: "xthings"}
+
+	provider := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "pkg.crossplane.io/v1",
+			"kind":       "Provider",
+			"metadata":   map[string]interface{}{"name": "provider-nop"},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{"type": "Installed", "status": "True"},
+					map[string]interface{}{"type": "Healthy", "status": "True"},
+				},
+			},
+		},
+	}
+	function := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "pkg.crossplane.io/v1beta1",
+			"kind":       "Function",
+			"metadata":   map[string]interface{}{"name": "function-patch-and-transform"},
+			"status": map[string]interface{}{
+				"conditions": []interface{}{
+					map[string]interface{}{"type": "Installed", "status": "True"},
+					map[string]interface{}{"type": "Healthy", "status": "False"},
+				},
+			},
+		},
+	}
+
+	client := newFakeClient(
+		map[schema.GroupVersionResource]string{
+			providerGVR: "ProviderList",
+			functionGVR: "FunctionList",
+			xrGVR:       "XThingList",
+		},
+		provider, function,
+	)
+
+	cfg := &config.Config{
+		XRGVRs:              []schema.GroupVersionResource{xrGVR},
+		PollIntervalSeconds: 30,
+	}
+	s := store.New()
+	poller := NewPoller(client, cfg, s)
+	poller.poll(context.Background())
+
+	if s.PackageCount() != 2 {
+		t.Fatalf("expected 2 packages, got %d", s.PackageCount())
+	}
+
+	byName := make(map[string]store.PackageInfo)
+	for _, pkg := range s.SnapshotPackages() {
+		byName[pkg.Name] = pkg
+	}
+
+	nop := byName["provider-nop"]
+	if nop.Kind != "Provider" || !nop.Healthy || !nop.Installed {
+		t.Errorf("provider-nop: got kind=%q healthy=%v installed=%v", nop.Kind, nop.Healthy, nop.Installed)
+	}
+	fn := byName["function-patch-and-transform"]
+	if fn.Kind != "Function" || fn.Healthy || !fn.Installed {
+		t.Errorf("function: got kind=%q healthy=%v installed=%v", fn.Kind, fn.Healthy, fn.Installed)
 	}
 }
 

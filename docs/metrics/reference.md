@@ -1,6 +1,6 @@
 # Metrics Reference
 
-xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resources, plus eleven **self-monitoring** metrics for operational visibility.
+xp-tracker exposes twenty-one Prometheus **gauge** metrics for Crossplane resources (claims, XRs, MRs, and packages), plus twelve **self-monitoring** metrics for operational visibility.
 
 ## Claim metrics
 
@@ -130,6 +130,29 @@ Unix creation timestamp for each MR. Same label set as `crossplane_mr_total`. Sk
 
 Unix deletion timestamp for each MR. Same label set as `crossplane_mr_total`. Emitted only while the MR is being deleted.
 
+## Package metrics
+
+Low-cardinality inventory for Crossplane package meta-types: **Provider**, **Configuration**, and **Function**. Package revisions (`*Revision`) are **not** scraped.
+
+### `crossplane_packages_total`
+
+Total number of package meta-types, broken down by a small label tuple.
+
+| Label | Description |
+|---|---|
+| `kind` | Package kind (`Provider`, `Configuration`, or `Function`) |
+| `name` | Package metadata name (e.g. `provider-nop`) |
+| `healthy` | Crossplane `Healthy` condition status (`true`/`false`) |
+| `installed` | Crossplane `Installed` condition status (`true`/`false`) |
+
+### `crossplane_packages_healthy`
+
+Number of packages with `status.conditions` containing `type: Healthy` and `status: "True"`. Same label set as `crossplane_packages_total`.
+
+### `crossplane_packages_installed`
+
+Number of packages with `status.conditions` containing `type: Installed` and `status: "True"`. Same label set as `crossplane_packages_total`.
+
 ## Example PromQL
 
 ```promql
@@ -144,13 +167,19 @@ sum by (reason) (crossplane_claims_status_ready == 0)
 
 # Paused MRs that still look ready
 crossplane_mr_status_ready == 1 and on(group, kind, namespace, name) crossplane_mr_total{paused="true"}
+
+# Unhealthy Providers / Functions
+crossplane_packages_total{healthy="false"}
+
+# Package health ratio
+sum(crossplane_packages_healthy) / sum(crossplane_packages_total)
 ```
 
 ## Aggregation behaviour
 
 Metrics are aggregated by their full label tuple. Because resource names are included, series are emitted per resource.
 
-This means cardinality is closely tied to the number of claims, XRs, and MRs, with additional dimensions from status labels.
+Claim/XR/MR cardinality tracks inventory size plus status labels. Package series stay small: one series per Provider/Configuration/Function object, with only four labels.
 
 ## Label notes
 
@@ -192,6 +221,10 @@ Gauge showing the current number of XRs in the in-memory store, updated after ea
 ### `xp_tracker_store_mrs`
 
 Gauge showing the current number of provider MRs in the in-memory store, updated after each poll.
+
+### `xp_tracker_store_packages`
+
+Gauge showing the current number of package meta-types (Provider/Configuration/Function) in the in-memory store, updated after each poll.
 
 ### `xp_tracker_s3_persist_duration_seconds`
 
