@@ -135,10 +135,17 @@ func (p *Poller) poll(ctx context.Context) {
 	metrics.StoreMRs.Set(float64(mrCount))
 	metrics.PollDuration.Observe(time.Since(start).Seconds())
 
+	// Freshness signal: only advance when every GVR list succeeded. Partial
+	// cycles leave the previous timestamp so alerts fire on sustained failures.
+	if !hadErrors {
+		metrics.LastSuccessfulPollTimestamp.Set(float64(time.Now().Unix()))
+	}
+
 	slog.Info("polling cycle complete",
 		"claims", claimCount,
 		"xrs", xrCount,
 		"mrs", mrCount,
+		"had_errors", hadErrors,
 	)
 }
 

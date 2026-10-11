@@ -34,6 +34,9 @@ data:
   # Optional: listen address for HTTP metrics server. Default: :8080
   METRICS_ADDR: ":8080"
 
+  # Optional: structured log level. Values: debug, info, warn, error. Default: info
+  # LOG_LEVEL: "info"
+
   # Optional: persistent store backend. Values: "memory" (default), "s3".
   # STORE_BACKEND: "memory"
 

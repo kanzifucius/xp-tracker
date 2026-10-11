@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"testing"
 
@@ -116,6 +117,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.MetricsAddr != ":8080" {
 		t.Errorf("expected default metrics addr :8080, got %s", cfg.MetricsAddr)
 	}
+	if cfg.LogLevel != slog.LevelInfo {
+		t.Errorf("expected default log level info, got %s", cfg.LogLevel)
+	}
 	if len(cfg.Namespaces) != 0 {
 		t.Errorf("expected no namespaces, got %v", cfg.Namespaces)
 	}
@@ -136,6 +140,7 @@ func TestLoad_AllOptions(t *testing.T) {
 		"POLL_INTERVAL_SECONDS":      "15",
 		"DISCOVERY_INTERVAL_SECONDS": "60",
 		"METRICS_ADDR":               ":9090",
+		"LOG_LEVEL":                  "debug",
 	})
 
 	cfg, err := Load()
@@ -163,6 +168,52 @@ func TestLoad_AllOptions(t *testing.T) {
 	}
 	if cfg.MetricsAddr != ":9090" {
 		t.Errorf("unexpected metrics addr: %s", cfg.MetricsAddr)
+	}
+	if cfg.LogLevel != slog.LevelDebug {
+		t.Errorf("unexpected log level: %s", cfg.LogLevel)
+	}
+}
+
+func TestParseLogLevel(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    slog.Level
+		wantErr bool
+	}{
+		{input: "debug", want: slog.LevelDebug},
+		{input: "INFO", want: slog.LevelInfo},
+		{input: " warn ", want: slog.LevelWarn},
+		{input: "warning", want: slog.LevelWarn},
+		{input: "error", want: slog.LevelError},
+		{input: "trace", wantErr: true},
+		{input: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseLogLevel(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("ParseLogLevel(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoad_InvalidLogLevel(t *testing.T) {
+	setEnvs(t, map[string]string{
+		"LOG_LEVEL": "verbose",
+	})
+
+	if _, err := Load(); err == nil {
+		t.Error("expected error for invalid LOG_LEVEL")
 	}
 }
 
@@ -364,6 +415,7 @@ func setEnvs(t *testing.T, envs map[string]string) {
 		"CREATOR_ANNOTATION_KEY", "TEAM_ANNOTATION_KEY",
 		"COMPOSITION_LABEL_KEY", "COMPOSITE_LABEL_KEY",
 		"POLL_INTERVAL_SECONDS", "DISCOVERY_INTERVAL_SECONDS", "METRICS_ADDR",
+		"LOG_LEVEL",
 		"STORE_BACKEND", "S3_BUCKET", "S3_KEY_PREFIX", "S3_REGION", "S3_ENDPOINT",
 	}
 	for _, k := range keys {

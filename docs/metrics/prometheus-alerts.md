@@ -74,6 +74,21 @@ spec:
             description: |
               Prometheus cannot find xp-tracker self metrics. Scrape or exporter may be down.
 
+        - alert: XpTrackerPollStale
+          # Successful = no per-GVR List errors in that cycle. Tune 90s ≈ 3× default POLL_INTERVAL_SECONDS.
+          expr: (time() - xp_tracker_last_successful_poll_timestamp_seconds) > 90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: xp-tracker poll data is stale
+            description: |
+              No fully successful poll cycle (zero GVR errors) has completed within the
+              freshness window. The gauge is updated only when every GVR List succeeds;
+              partial failures leave the previous timestamp so this alert covers sustained
+              poll errors as well as a stuck exporter. Raise the threshold if you use a
+              longer POLL_INTERVAL_SECONDS (aim for roughly 3× the interval).
+
         - alert: XpTrackerMRDDiscoverySkipped
           expr: sum(xp_tracker_mrd_discovery_skipped_total) > 0
           for: 5m
@@ -150,6 +165,7 @@ spec:
   - larger clusters often work better with ratios
 - Start with longer `for` windows (10-20m) to reduce noise from short transitions.
 - If `POLL_INTERVAL_SECONDS` is above 30s, increase `for` windows proportionally.
+- For `XpTrackerPollStale`, set the age threshold to roughly `3 × POLL_INTERVAL_SECONDS` (and keep `for` long enough to absorb one slow cycle).
 - Route `warning` alerts to team channels and `critical` alerts to paging.
 
 ## Caveats for status-in-label metrics

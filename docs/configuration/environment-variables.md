@@ -17,6 +17,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | No | `300` | Seconds between XRD/MRD re-discovery cycles. `0` disables periodic re-discovery (startup discovery still runs once) |
 | `METRICS_ADDR` | No | `:8080` | Listen address for the HTTP metrics server |
+| `LOG_LEVEL` | No | `info` | Structured log level: `debug`, `info`, `warn`, or `error` |
 | `STORE_BACKEND` | No | `memory` | Persistent store backend: `memory` or `s3` |
 | `S3_BUCKET` | When `s3` | `""` | S3 bucket name |
 | `S3_KEY_PREFIX` | No | `xp-tracker` | S3 key prefix for snapshot file |
@@ -138,4 +139,9 @@ data:
   POLL_INTERVAL_SECONDS: "30"
   # DISCOVERY_INTERVAL_SECONDS: "300"  # 0 disables periodic re-discovery
   METRICS_ADDR: ":8080"
+  # LOG_LEVEL: "info"  # debug|info|warn|error
 ```
+
+## Logging
+
+`LOG_LEVEL` controls the slog JSON handler used by the exporter process (`debug`, `info`, `warn`, or `error`). The default is `info`. Set `debug` temporarily when diagnosing poll or discovery issues; keep production at `info` or `warn` to limit volume.
