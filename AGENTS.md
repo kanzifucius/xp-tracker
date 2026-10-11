@@ -62,10 +62,15 @@ here**. Reproduce an equivalent local cluster manually instead:
    Then `curl localhost:8080/metrics` (series prefixed `crossplane_` and
    `xp_tracker_store_`).
 6. `make e2e` is the kindplane-free equivalent of the CI job: one-node kind,
-   Helm-install Crossplane chart `2.0.2`, apply `hack/samples/` (including
-   `v2-namespaced.yaml`), run the exporter, then `hack/e2e/assert-metrics.sh`.
-   Function `Healthy` waits may time out on `xpkg.upbound.io` pulls; that is
-   non-fatal. PRs need the `e2e` label to run this in GitHub Actions.
+   Helm-install Crossplane chart `2.0.2`, install `provider-nop` (pinned in
+   `hack/e2e/versions.env`), apply `hack/samples/` (including
+   `v2-namespaced.yaml` and XR-linked `ClusterNopResource`s), run the exporter,
+   then `hack/e2e/assert-metrics.sh` (claims, XRs, and `crossplane_mr_total`).
+   Function/provider `Healthy` waits may time out on `xpkg.upbound.io` pulls;
+   that is non-fatal — e2e falls back to a sample Active MRD + CRD when the
+   provider package does not establish, and applies XR-linked MRs without
+   requiring composition readiness. PRs need the `e2e` label to run this in
+   GitHub Actions.
 
 GVRs are auto-discovered; `CLAIM_GVRS`/`XR_GVRS` env vars are deprecated additive
 merges with discovery (deduplicated). All configuration is via environment

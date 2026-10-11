@@ -85,11 +85,15 @@ Locally (Docker, kind, helm, and kubectl required):
 make e2e
 ```
 
-That creates a one-node kind cluster, Helm-installs Crossplane 2.0.2, applies
-`hack/samples/` (including `v2-namespaced.yaml`), runs the exporter, and asserts
-`/healthz`, `/readyz`, and `/metrics` via `hack/e2e/assert-metrics.sh`. Waiting
-for `function-patch-and-transform` to become Healthy may time out while pulling
-from `xpkg.upbound.io`; the e2e job treats that as non-fatal.
+That creates a one-node kind cluster, Helm-installs Crossplane 2.0.2, installs
+`provider-nop` (for Active MRDs / XR-linked MR metrics), applies
+`hack/samples/` (including `v2-namespaced.yaml` and sample
+`ClusterNopResource`s), runs the exporter, and asserts `/healthz`, `/readyz`,
+and `/metrics` via `hack/e2e/assert-metrics.sh` (including
+`crossplane_mr_total`). Waiting for `function-patch-and-transform` or
+`provider-nop` to become Healthy may time out while pulling from
+`xpkg.upbound.io`; the e2e job treats Healthy timeouts as non-fatal and falls
+back to a sample Active MRD when needed.
 
 To re-check an exporter that is already listening:
 
