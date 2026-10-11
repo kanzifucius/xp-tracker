@@ -48,14 +48,34 @@ var (
 	})
 
 	// MRDDiscoverySkipped counts Active ManagedResourceDefinitions skipped
-	// during startup MR GVR discovery because their spec could not yield a
-	// usable group/version/resource (for example, no storage or served
-	// version). Labelled by short reason so operators can alert on cluster
-	// data-quality problems without taking the exporter down.
+	// during MR GVR discovery because their spec could not yield a usable
+	// group/version/resource (for example, no storage or served version).
+	// Labelled by short reason so operators can alert on cluster data-quality
+	// problems without taking the exporter down.
 	MRDDiscoverySkipped = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "xp_tracker_mrd_discovery_skipped_total",
 		Help: "Total number of Active ManagedResourceDefinitions skipped during MR GVR discovery because their spec was unusable.",
 	}, []string{"reason"})
+
+	// DiscoveryRuns counts completed XRD/MRD discovery attempts (startup and
+	// periodic refresh), partitioned by result.
+	DiscoveryRuns = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "xp_tracker_discovery_runs_total",
+		Help: "Total number of XRD/MRD discovery runs, partitioned by result (success or error).",
+	}, []string{"result"})
+
+	// DiscoveryDuration tracks how long each XRD/MRD discovery run takes.
+	DiscoveryDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "xp_tracker_discovery_duration_seconds",
+		Help:    "Duration of an XRD/MRD discovery run in seconds.",
+		Buckets: prometheus.DefBuckets,
+	})
+)
+
+// Known result label values for DiscoveryRuns.
+const (
+	DiscoveryResultSuccess = "success"
+	DiscoveryResultError   = "error"
 )
 
 // Known reason label values for MRDDiscoverySkipped. Pre-initialised at
@@ -79,6 +99,8 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		StoreMRs,
 		S3PersistDuration,
 		MRDDiscoverySkipped,
+		DiscoveryRuns,
+		DiscoveryDuration,
 	)
 
 	// Pre-create the known reason series at 0.
@@ -90,5 +112,8 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		MRDSkipReasonOther,
 	} {
 		MRDDiscoverySkipped.WithLabelValues(reason)
+	}
+	for _, result := range []string{DiscoveryResultSuccess, DiscoveryResultError} {
+		DiscoveryRuns.WithLabelValues(result)
 	}
 }

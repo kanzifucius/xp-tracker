@@ -219,8 +219,7 @@ func nestedStringSliceJoined(obj map[string]interface{}, fields ...string) strin
 }
 
 func xrSupportsClaims(cfg *config.Config, gvr schema.GroupVersionResource) bool {
-	scope, known := cfg.XRGVRSScopes[GVRString(gvr)]
-	return !known || scope == config.ResourceScopeLegacyCluster
+	return cfg.XRSupportsClaims(gvr)
 }
 
 // resourceToKind converts a plural lowercase resource name to a PascalCase kind.
