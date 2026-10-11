@@ -199,7 +199,7 @@ At startup (and every `DISCOVERY_INTERVAL_SECONDS` by default), xp-tracker lists
 
 Version selection is deterministic: first `referenceable` version, otherwise first `served` version.
 
-If no XR GVRs can be discovered from XRDs, startup fails with a clear error. A failed periodic refresh keeps the previous inventory. Claims are optional because native Crossplane v2 XRDs do not support them. Deprecated `CLAIM_GVRS` / `XR_GVRS` values are merged into the discovered sets (deduplicated) and do not replace discovery. Set `DISCOVERY_INTERVAL_SECONDS=0` to disable periodic re-discovery.
+XRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_xrd_discovery_skipped_total`) instead of failing discovery. Listing XRDs still fails fatally. If no XR GVRs can be discovered from XRDs, startup fails with a clear error. A failed periodic refresh keeps the previous inventory. Claims are optional because native Crossplane v2 XRDs do not support them. Deprecated `CLAIM_GVRS` / `XR_GVRS` values are merged into the discovered sets (deduplicated) and do not replace discovery. Set `DISCOVERY_INTERVAL_SECONDS=0` to disable periodic re-discovery.
 
 ### Provider MR discovery
 
@@ -705,6 +705,7 @@ xp-tracker also exposes metrics about its own operation under the `xp_tracker_` 
 | `xp_tracker_store_xrs` | Gauge | Current number of XRs in the store |
 | `xp_tracker_s3_persist_duration_seconds` | Histogram | Duration of each S3 persist operation |
 | `xp_tracker_mrd_discovery_skipped_total` | Counter | Active MRDs skipped during discovery because their spec was unusable (`reason` label) |
+| `xp_tracker_xrd_discovery_skipped_total` | Counter | XRDs skipped during discovery because their spec was unusable (`reason` label) |
 | `xp_tracker_discovery_runs_total` | Counter | XRD/MRD discovery runs (`result`=`success` or `error`) |
 | `xp_tracker_discovery_duration_seconds` | Histogram | Duration of each XRD/MRD discovery run |
 

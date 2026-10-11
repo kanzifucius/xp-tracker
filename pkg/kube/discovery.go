@@ -17,14 +17,16 @@ import (
 	"github.com/kanzifucius/xp-tracker/pkg/metrics"
 )
 
-// Sentinel errors returned when deriving a GVR from an MRD (or shared
-// apiExtensionSpec) fails. Mapped to short Prometheus reason labels in
-// mrdSkipReason so operators can alert without crashing the exporter.
+// Sentinel errors returned when deriving a GVR from an XRD, MRD, or shared
+// apiExtensionSpec fails. Mapped to short Prometheus reason labels in
+// xrdSkipReason / mrdSkipReason so operators can alert without crashing the
+// exporter.
 var (
-	errMissingGroup             = errors.New("missing spec.group")
-	errMissingPlural            = errors.New("missing spec.names.plural")
-	errMissingVersions          = errors.New("missing spec.versions")
-	errNoStorageOrServedVersion = errors.New("no storage or served version found")
+	errMissingGroup                   = errors.New("missing spec.group")
+	errMissingPlural                  = errors.New("missing spec.names.plural")
+	errMissingVersions                = errors.New("missing spec.versions")
+	errNoStorageOrServedVersion       = errors.New("no storage or served version found")
+	errNoReferenceableOrServedVersion = errors.New("no referenceable or served version found")
 )
 
 const packageLabelKey = "pkg.crossplane.io/package"
@@ -67,7 +69,10 @@ func DiscoverFromXRD(ctx context.Context, client dynamic.Interface) ([]schema.Gr
 				if name == "" {
 					name = "<unknown>"
 				}
-				return nil, nil, nil, fmt.Errorf("derive GVRs from XRD %q: %w", name, err)
+				reason := xrdSkipReason(err)
+				slog.Warn("skipping XRD with unusable spec", "xrd", name, "reason", reason, "error", err)
+				metrics.XRDDiscoverySkipped.WithLabelValues(reason).Inc()
+				continue
 			}
 
 			key := gvrKey(xrGVR)
@@ -245,12 +250,12 @@ func mrdSkipReason(err error) string {
 func xrdToGVRs(xrd unstructured.Unstructured) (schema.GroupVersionResource, schema.GroupVersionResource, bool, error) {
 	group, found, err := unstructured.NestedString(xrd.Object, "spec", "group")
 	if err != nil || !found || group == "" {
-		return schema.GroupVersionResource{}, schema.GroupVersionResource{}, false, fmt.Errorf("missing spec.group")
+		return schema.GroupVersionResource{}, schema.GroupVersionResource{}, false, errMissingGroup
 	}
 
 	xrPlural, found, err := unstructured.NestedString(xrd.Object, "spec", "names", "plural")
 	if err != nil || !found || xrPlural == "" {
-		return schema.GroupVersionResource{}, schema.GroupVersionResource{}, false, fmt.Errorf("missing spec.names.plural")
+		return schema.GroupVersionResource{}, schema.GroupVersionResource{}, false, errMissingPlural
 	}
 
 	version, err := selectVersion(xrd)
@@ -280,7 +285,7 @@ func xrdToGVRs(xrd unstructured.Unstructured) (schema.GroupVersionResource, sche
 func selectVersion(xrd unstructured.Unstructured) (string, error) {
 	versions, found, err := unstructured.NestedSlice(xrd.Object, "spec", "versions")
 	if err != nil || !found || len(versions) == 0 {
-		return "", fmt.Errorf("missing spec.versions")
+		return "", errMissingVersions
 	}
 
 	for _, v := range versions {
@@ -307,7 +312,23 @@ func selectVersion(xrd unstructured.Unstructured) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no referenceable or served version found")
+	return "", errNoReferenceableOrServedVersion
+}
+
+// xrdSkipReason maps a GVR-derivation error to a short Prometheus label value.
+func xrdSkipReason(err error) string {
+	switch {
+	case errors.Is(err, errMissingGroup):
+		return metrics.XRDSkipReasonMissingGroup
+	case errors.Is(err, errMissingPlural):
+		return metrics.XRDSkipReasonMissingPlural
+	case errors.Is(err, errMissingVersions):
+		return metrics.XRDSkipReasonMissingVersions
+	case errors.Is(err, errNoReferenceableOrServedVersion):
+		return metrics.XRDSkipReasonNoReferenceableOrServedVersion
+	default:
+		return metrics.XRDSkipReasonOther
+	}
 }
 
 func mapToSortedSlice(items map[string]schema.GroupVersionResource) []schema.GroupVersionResource {

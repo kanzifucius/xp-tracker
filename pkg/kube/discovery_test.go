@@ -85,8 +85,36 @@ func TestDiscoverFromXRD(t *testing.T) {
 	}
 }
 
-func TestDiscoverFromXRD_ErrorsOnInvalidXRD(t *testing.T) {
-	invalid := &unstructured.Unstructured{
+func healthyXRD(name, group, plural string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.crossplane.io/v1",
+			"kind":       "CompositeResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": name,
+			},
+			"spec": map[string]interface{}{
+				"group": group,
+				"names": map[string]interface{}{
+					"plural": plural,
+				},
+				"claimNames": map[string]interface{}{
+					"plural": "claims-" + plural,
+				},
+				"versions": []interface{}{
+					map[string]interface{}{"name": "v1beta1", "served": true, "referenceable": true},
+				},
+			},
+		},
+	}
+}
+
+func TestDiscoverFromXRD_SkipsMalformedXRD(t *testing.T) {
+	healthy := healthyXRD("xpostgresqlinstances.platform.example.org", "platform.example.org", "xpostgresqlinstances")
+
+	// XRD with versions present but none referenceable or served — previously
+	// aborted discovery for the whole process.
+	malformed := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apiextensions.crossplane.io/v1",
 			"kind":       "CompositeResourceDefinition",
@@ -111,12 +139,152 @@ func TestDiscoverFromXRD_ErrorsOnInvalidXRD(t *testing.T) {
 			xrdV1GVR: "CompositeResourceDefinitionList",
 			xrdV2GVR: "CompositeResourceDefinitionList",
 		},
-		invalid,
+		healthy, malformed,
 	)
 
-	_, _, _, err := DiscoverFromXRD(context.Background(), client)
-	if err == nil {
-		t.Fatal("expected discovery error for XRD without referenceable/served versions")
+	reason := metrics.XRDSkipReasonNoReferenceableOrServedVersion
+	before := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+
+	claims, xrs, scopes, err := DiscoverFromXRD(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverFromXRD error: %v", err)
+	}
+	if len(xrs) != 1 {
+		t.Fatalf("expected 1 XR GVR (healthy only), got %d", len(xrs))
+	}
+	if xrs[0].Resource != "xpostgresqlinstances" {
+		t.Fatalf("expected healthy xpostgresqlinstances GVR, got %+v", xrs[0])
+	}
+	if len(claims) != 1 {
+		t.Fatalf("expected 1 claim GVR from healthy XRD, got %d", len(claims))
+	}
+	if scopes[gvrKey(xrs[0])] != config.ResourceScopeLegacyCluster {
+		t.Fatalf("expected LegacyCluster scope, got %q", scopes[gvrKey(xrs[0])])
+	}
+
+	after := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 1 {
+		t.Fatalf("skipped counter delta = %v, want 1 for reason %q", got, reason)
+	}
+}
+
+func TestDiscoverFromXRD_SkipsMissingPlural(t *testing.T) {
+	healthy := healthyXRD("xpostgresqlinstances.platform.example.org", "platform.example.org", "xpostgresqlinstances")
+	broken := healthyXRD("broken.example.org", "example.org", "xbrokens")
+	broken.Object["spec"].(map[string]interface{})["names"] = map[string]interface{}{}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			xrdV1GVR: "CompositeResourceDefinitionList",
+			xrdV2GVR: "CompositeResourceDefinitionList",
+		},
+		healthy, broken,
+	)
+
+	reason := metrics.XRDSkipReasonMissingPlural
+	before := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+
+	claims, xrs, _, err := DiscoverFromXRD(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverFromXRD error: %v", err)
+	}
+	if len(xrs) != 1 {
+		t.Fatalf("expected 1 XR GVR, got %d", len(xrs))
+	}
+	if len(claims) != 1 {
+		t.Fatalf("expected 1 claim GVR, got %d", len(claims))
+	}
+
+	after := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 1 {
+		t.Fatalf("skipped counter delta = %v, want 1 for reason %q", got, reason)
+	}
+}
+
+func TestDiscoverFromXRD_SkipsMissingVersions(t *testing.T) {
+	healthy := healthyXRD("xpostgresqlinstances.platform.example.org", "platform.example.org", "xpostgresqlinstances")
+	broken := healthyXRD("broken.example.org", "example.org", "xbrokens")
+	delete(broken.Object["spec"].(map[string]interface{}), "versions")
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			xrdV1GVR: "CompositeResourceDefinitionList",
+			xrdV2GVR: "CompositeResourceDefinitionList",
+		},
+		healthy, broken,
+	)
+
+	reason := metrics.XRDSkipReasonMissingVersions
+	before := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+
+	_, xrs, _, err := DiscoverFromXRD(context.Background(), client)
+	if err != nil {
+		t.Fatalf("DiscoverFromXRD error: %v", err)
+	}
+	if len(xrs) != 1 {
+		t.Fatalf("expected 1 XR GVR, got %d", len(xrs))
+	}
+
+	after := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 1 {
+		t.Fatalf("skipped counter delta = %v, want 1 for reason %q", got, reason)
+	}
+}
+
+// TestDiscoverFromXRD_RediscoverySkipsMalformed ensures a second discovery
+// pass (periodic refresh) also skips unusable XRDs rather than aborting, so
+// a previously healthy inventory can still be replaced with the good set.
+func TestDiscoverFromXRD_RediscoverySkipsMalformed(t *testing.T) {
+	healthy := healthyXRD("xpostgresqlinstances.platform.example.org", "platform.example.org", "xpostgresqlinstances")
+	malformed := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.crossplane.io/v1",
+			"kind":       "CompositeResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "broken.example.org",
+			},
+			"spec": map[string]interface{}{
+				"group": "example.org",
+				"names": map[string]interface{}{
+					"plural": "xbrokens",
+				},
+				"versions": []interface{}{
+					map[string]interface{}{"name": "v1", "served": false},
+				},
+			},
+		},
+	}
+
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			xrdV1GVR: "CompositeResourceDefinitionList",
+			xrdV2GVR: "CompositeResourceDefinitionList",
+		},
+		healthy, malformed,
+	)
+
+	reason := metrics.XRDSkipReasonNoReferenceableOrServedVersion
+	before := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+
+	for pass := 1; pass <= 2; pass++ {
+		claims, xrs, _, err := DiscoverFromXRD(context.Background(), client)
+		if err != nil {
+			t.Fatalf("DiscoverFromXRD pass %d error: %v", pass, err)
+		}
+		if len(xrs) != 1 || xrs[0].Resource != "xpostgresqlinstances" {
+			t.Fatalf("pass %d: expected healthy XR only, got %v", pass, xrs)
+		}
+		if len(claims) != 1 {
+			t.Fatalf("pass %d: expected 1 claim GVR, got %d", pass, len(claims))
+		}
+	}
+
+	after := testutil.ToFloat64(metrics.XRDDiscoverySkipped.WithLabelValues(reason))
+	if got := after - before; got != 2 {
+		t.Fatalf("skipped counter delta = %v, want 2 (one per rediscovery pass)", got)
 	}
 }
 

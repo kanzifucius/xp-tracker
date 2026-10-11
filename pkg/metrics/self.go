@@ -57,6 +57,16 @@ var (
 		Help: "Total number of Active ManagedResourceDefinitions skipped during MR GVR discovery because their spec was unusable.",
 	}, []string{"reason"})
 
+	// XRDDiscoverySkipped counts CompositeResourceDefinitions skipped during
+	// claim/XR GVR discovery because their spec could not yield a usable
+	// group/version/resource (for example, no referenceable or served
+	// version). Labelled by short reason so operators can alert on cluster
+	// data-quality problems without taking the exporter down.
+	XRDDiscoverySkipped = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "xp_tracker_xrd_discovery_skipped_total",
+		Help: "Total number of CompositeResourceDefinitions skipped during claim/XR GVR discovery because their spec was unusable.",
+	}, []string{"reason"})
+
 	// DiscoveryRuns counts completed XRD/MRD discovery attempts (startup and
 	// periodic refresh), partitioned by result.
 	DiscoveryRuns = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -88,6 +98,16 @@ const (
 	MRDSkipReasonOther                    = "other"
 )
 
+// Known reason label values for XRDDiscoverySkipped. Pre-initialised at
+// registration so the series exists at 0 and alerts on > 0 work immediately.
+const (
+	XRDSkipReasonMissingGroup                   = "missing_group"
+	XRDSkipReasonMissingPlural                  = "missing_plural"
+	XRDSkipReasonMissingVersions                = "missing_versions"
+	XRDSkipReasonNoReferenceableOrServedVersion = "no_referenceable_or_served_version"
+	XRDSkipReasonOther                          = "other"
+)
+
 // RegisterSelfMetrics registers all self-monitoring metrics with the given
 // Prometheus registry.
 func RegisterSelfMetrics(reg prometheus.Registerer) {
@@ -99,6 +119,7 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		StoreMRs,
 		S3PersistDuration,
 		MRDDiscoverySkipped,
+		XRDDiscoverySkipped,
 		DiscoveryRuns,
 		DiscoveryDuration,
 	)
@@ -112,6 +133,15 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		MRDSkipReasonOther,
 	} {
 		MRDDiscoverySkipped.WithLabelValues(reason)
+	}
+	for _, reason := range []string{
+		XRDSkipReasonMissingGroup,
+		XRDSkipReasonMissingPlural,
+		XRDSkipReasonMissingVersions,
+		XRDSkipReasonNoReferenceableOrServedVersion,
+		XRDSkipReasonOther,
+	} {
+		XRDDiscoverySkipped.WithLabelValues(reason)
 	}
 	for _, result := range []string{DiscoveryResultSuccess, DiscoveryResultError} {
 		DiscoveryRuns.WithLabelValues(result)
