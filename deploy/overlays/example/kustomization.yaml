@@ -27,6 +27,8 @@ patches:
 
   # IMPORTANT: Scope the ClusterRole to only the API groups and resources your
   # exporter actually needs.  The base grants read access to ALL resources.
+  # Discovery requires get/list/watch on XRDs and MRDs; polling requires the
+  # claim/XR (and MR) plurals your platform actually uses.
   - target:
       kind: ClusterRole
       name: crossplane-metrics-exporter
@@ -36,6 +38,13 @@ patches:
       metadata:
         name: crossplane-metrics-exporter
       rules:
+        # XRD + MRD discovery (required for auto-discovery at startup)
+        - apiGroups: ["apiextensions.crossplane.io"]
+          resources:
+            - compositeresourcedefinitions
+            - managedresourcedefinitions
+          verbs: ["get", "list", "watch"]
+        # Example platform claim + XR plurals (replace with your GVRs)
         - apiGroups: ["platform.example.org"]
           resources:
             - postgresqlinstances

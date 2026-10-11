@@ -13,13 +13,17 @@ rules:
   # groups.  This is intentionally broad so the base works out-of-the-box with
   # any Crossplane provider, but it violates the principle of least privilege.
   #
-  # BEFORE deploying to production you MUST scope the rules to only the API
-  # groups and resources that match your discovered claim/XR types plus
-  # compositeresourcedefinitions.apiextensions.crossplane.io for discovery
-  # and managedresourcedefinitions.apiextensions.crossplane.io for MR discovery.
-  # See deploy/overlays/example/ for a properly-scoped ClusterRole patch.
+  # BEFORE deploying to production you MUST scope the rules to:
+  #   1. compositeresourcedefinitions + managedresourcedefinitions in
+  #      apiextensions.crossplane.io (required for XRD/MRD auto-discovery)
+  #   2. the claim/XR/MR plurals your exporter actually polls
+  # See deploy/overlays/example/ for a discovery-complete least-privilege
+  # ClusterRole patch, and docs/deployment/rbac.md for the minimum matrix.
   #
-  # Example scoped rule:
+  # Example scoped rules:
+  #   - apiGroups: ["apiextensions.crossplane.io"]
+  #     resources: ["compositeresourcedefinitions", "managedresourcedefinitions"]
+  #     verbs: ["get", "list", "watch"]
   #   - apiGroups: ["platform.example.org"]
   #     resources: ["postgresqlinstances", "xpostgresqlinstances"]
   #     verbs: ["get", "list", "watch"]
