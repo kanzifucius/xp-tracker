@@ -152,6 +152,35 @@ func deletionTimestamp(obj unstructured.Unstructured) time.Time {
 	return ts.Time
 }
 
+// UnstructuredToPackage converts an unstructured Provider, Configuration, or
+// Function object into a PackageInfo. Healthy and Installed come from the
+// standard pkg.crossplane.io conditions.
+func UnstructuredToPackage(obj unstructured.Unstructured, gvr schema.GroupVersionResource) store.PackageInfo {
+	pkg := store.PackageInfo{
+		GVR:     GVRString(gvr),
+		Group:   gvr.Group,
+		Version: gvr.Version,
+		Kind:    obj.GetKind(),
+		Name:    obj.GetName(),
+	}
+	if pkg.Kind == "" {
+		pkg.Kind = resourceToKind(gvr.Resource)
+		// resourceToKind is a rough heuristic ("providers" -> "Provider");
+		// normalise common package plurals explicitly.
+		switch gvr.Resource {
+		case "providers":
+			pkg.Kind = "Provider"
+		case "configurations":
+			pkg.Kind = "Configuration"
+		case "functions":
+			pkg.Kind = "Function"
+		}
+	}
+	pkg.Healthy = extractConditionStatus(obj.Object, "Healthy")
+	pkg.Installed = extractConditionStatus(obj.Object, "Installed")
+	return pkg
+}
+
 // extractReadyCondition finds the "Ready" condition in status.conditions and returns
 // (ready bool, reason string).
 func extractReadyCondition(obj map[string]interface{}) (bool, string) {

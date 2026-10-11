@@ -59,18 +59,21 @@ func NewS3Store(mem *MemoryStore, client S3Client, bucket, keyPrefix string) *S3
 // Store interface delegation – all reads/writes go through MemoryStore.
 // ---------------------------------------------------------------------------
 
-func (s *S3Store) ReplaceClaims(gvr string, items []ClaimInfo) { s.mem.ReplaceClaims(gvr, items) }
-func (s *S3Store) ReplaceXRs(gvr string, items []XRInfo)       { s.mem.ReplaceXRs(gvr, items) }
-func (s *S3Store) ReplaceMRs(gvr string, items []MRInfo)       { s.mem.ReplaceMRs(gvr, items) }
-func (s *S3Store) EnrichClaimCompositions()                    { s.mem.EnrichClaimCompositions() }
-func (s *S3Store) EnrichXRClaims()                             { s.mem.EnrichXRClaims() }
-func (s *S3Store) EnrichMRClaims()                             { s.mem.EnrichMRClaims() }
-func (s *S3Store) SnapshotClaims() []ClaimInfo                 { return s.mem.SnapshotClaims() }
-func (s *S3Store) SnapshotXRs() []XRInfo                       { return s.mem.SnapshotXRs() }
-func (s *S3Store) SnapshotMRs() []MRInfo                       { return s.mem.SnapshotMRs() }
-func (s *S3Store) ClaimCount() int                             { return s.mem.ClaimCount() }
-func (s *S3Store) XRCount() int                                { return s.mem.XRCount() }
-func (s *S3Store) MRCount() int                                { return s.mem.MRCount() }
+func (s *S3Store) ReplaceClaims(gvr string, items []ClaimInfo)     { s.mem.ReplaceClaims(gvr, items) }
+func (s *S3Store) ReplaceXRs(gvr string, items []XRInfo)           { s.mem.ReplaceXRs(gvr, items) }
+func (s *S3Store) ReplaceMRs(gvr string, items []MRInfo)           { s.mem.ReplaceMRs(gvr, items) }
+func (s *S3Store) ReplacePackages(gvr string, items []PackageInfo) { s.mem.ReplacePackages(gvr, items) }
+func (s *S3Store) EnrichClaimCompositions()                        { s.mem.EnrichClaimCompositions() }
+func (s *S3Store) EnrichXRClaims()                                 { s.mem.EnrichXRClaims() }
+func (s *S3Store) EnrichMRClaims()                                 { s.mem.EnrichMRClaims() }
+func (s *S3Store) SnapshotClaims() []ClaimInfo                     { return s.mem.SnapshotClaims() }
+func (s *S3Store) SnapshotXRs() []XRInfo                           { return s.mem.SnapshotXRs() }
+func (s *S3Store) SnapshotMRs() []MRInfo                           { return s.mem.SnapshotMRs() }
+func (s *S3Store) SnapshotPackages() []PackageInfo                 { return s.mem.SnapshotPackages() }
+func (s *S3Store) ClaimCount() int                                 { return s.mem.ClaimCount() }
+func (s *S3Store) XRCount() int                                    { return s.mem.XRCount() }
+func (s *S3Store) MRCount() int                                    { return s.mem.MRCount() }
+func (s *S3Store) PackageCount() int                               { return s.mem.PackageCount() }
 
 // ---------------------------------------------------------------------------
 // PersistentStore implementation
@@ -85,6 +88,7 @@ func (s *S3Store) Persist(ctx context.Context) error {
 		Claims:      s.mem.SnapshotClaims(),
 		XRs:         s.mem.SnapshotXRs(),
 		MRs:         s.mem.SnapshotMRs(),
+		Packages:    s.mem.SnapshotPackages(),
 		PersistedAt: time.Now().UTC(),
 	}
 
@@ -109,6 +113,7 @@ func (s *S3Store) Persist(ctx context.Context) error {
 		"claims", len(snap.Claims),
 		"xrs", len(snap.XRs),
 		"mrs", len(snap.MRs),
+		"packages", len(snap.Packages),
 	)
 	return nil
 }
@@ -174,12 +179,21 @@ func (s *S3Store) Restore(ctx context.Context) error {
 		s.mem.ReplaceMRs(gvr, items)
 	}
 
+	pkgsByGVR := make(map[string][]PackageInfo)
+	for _, p := range snap.Packages {
+		pkgsByGVR[p.GVR] = append(pkgsByGVR[p.GVR], p)
+	}
+	for gvr, items := range pkgsByGVR {
+		s.mem.ReplacePackages(gvr, items)
+	}
+
 	slog.Info("restored store snapshot from S3",
 		"bucket", s.bucket,
 		"key", s.key,
 		"claims", len(snap.Claims),
 		"xrs", len(snap.XRs),
 		"mrs", len(snap.MRs),
+		"packages", len(snap.Packages),
 		"persistedAt", snap.PersistedAt,
 	)
 	return nil

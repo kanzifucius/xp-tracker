@@ -48,6 +48,13 @@ var (
 		Help: "Current number of provider MRs in the in-memory store.",
 	})
 
+	// StorePackages reports the number of package meta-types currently held
+	// in the store (Providers, Configurations, Functions).
+	StorePackages = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "xp_tracker_store_packages",
+		Help: "Current number of Crossplane packages (Provider/Configuration/Function) in the in-memory store.",
+	})
+
 	// S3PersistDuration tracks the duration of S3 persist operations.
 	S3PersistDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "xp_tracker_s3_persist_duration_seconds",
@@ -126,6 +133,7 @@ func RegisterSelfMetrics(reg prometheus.Registerer) {
 		StoreClaims,
 		StoreXRs,
 		StoreMRs,
+		StorePackages,
 		S3PersistDuration,
 		MRDDiscoverySkipped,
 		XRDDiscoverySkipped,

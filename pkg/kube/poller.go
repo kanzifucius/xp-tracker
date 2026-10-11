@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -27,8 +29,18 @@ import (
 // within the QPS ceiling.
 const mrPollConcurrency = 20
 
-// Poller periodically lists Crossplane claims, XRs, and managed resources from
-// the Kubernetes API and updates the in-memory store.
+// packageGVRs are the fixed, low-cardinality pkg.crossplane.io meta-types
+// polled each cycle. Package revisions (ProviderRevision, etc.) are excluded
+// on purpose. Function uses v1beta1 to match Crossplane 2.0.x samples; if a
+// cluster only serves functions/v1 the NotFound path skips this GVR cleanly.
+var packageGVRs = []schema.GroupVersionResource{
+	{Group: "pkg.crossplane.io", Version: "v1", Resource: "providers"},
+	{Group: "pkg.crossplane.io", Version: "v1", Resource: "configurations"},
+	{Group: "pkg.crossplane.io", Version: "v1beta1", Resource: "functions"},
+}
+
+// Poller periodically lists Crossplane claims, XRs, managed resources, and
+// package meta-types from the Kubernetes API and updates the in-memory store.
 type Poller struct {
 	client dynamic.Interface
 	cfg    *config.Config
@@ -108,6 +120,15 @@ func (p *Poller) poll(ctx context.Context) {
 		hadErrors = true
 	}
 
+	// Package inventory is a small fixed set (Providers, Configurations,
+	// Functions). Revisions are never listed.
+	for _, gvr := range packageGVRs {
+		if err := p.pollPackages(ctx, gvr); err != nil {
+			hadErrors = true
+			metrics.PollErrors.WithLabelValues(GVRString(gvr)).Inc()
+		}
+	}
+
 	// Enrich legacy claims from XRs, legacy XRs from claims, and MRs from XRs.
 	p.store.EnrichClaimCompositions()
 	p.store.EnrichXRClaims()
@@ -130,9 +151,11 @@ func (p *Poller) poll(ctx context.Context) {
 	claimCount := p.store.ClaimCount()
 	xrCount := p.store.XRCount()
 	mrCount := p.store.MRCount()
+	pkgCount := p.store.PackageCount()
 	metrics.StoreClaims.Set(float64(claimCount))
 	metrics.StoreXRs.Set(float64(xrCount))
 	metrics.StoreMRs.Set(float64(mrCount))
+	metrics.StorePackages.Set(float64(pkgCount))
 	metrics.PollDuration.Observe(time.Since(start).Seconds())
 
 	// Freshness signal: only advance when every GVR list succeeded. Partial
@@ -145,6 +168,7 @@ func (p *Poller) poll(ctx context.Context) {
 		"claims", claimCount,
 		"xrs", xrCount,
 		"mrs", mrCount,
+		"packages", pkgCount,
 		"had_errors", hadErrors,
 	)
 }
@@ -366,6 +390,54 @@ func (p *Poller) listClaims(ctx context.Context, gvr schema.GroupVersionResource
 		}
 	}
 	return claims, nil
+}
+
+// pollPackages lists Providers, Configurations, or Functions for a GVR and
+// updates the store. A missing API (NotFound) is treated as an empty inventory
+// so clusters without that package kind/version do not fail the poll cycle.
+func (p *Poller) pollPackages(ctx context.Context, gvr schema.GroupVersionResource) error {
+	gvrStr := GVRString(gvr)
+	pkgs, err := p.listPackages(ctx, gvr)
+	if err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			p.store.ReplacePackages(gvrStr, nil)
+			slog.Debug("package GVR not found; treating as empty", "gvr", gvrStr)
+			return nil
+		}
+		slog.Error("failed to list packages", "gvr", gvrStr, "error", err)
+		return err
+	}
+	p.store.ReplacePackages(gvrStr, pkgs)
+	slog.Debug("packages updated", "gvr", gvrStr, "count", len(pkgs))
+	return nil
+}
+
+// listPackages lists cluster-scoped package meta-types for a GVR.
+func (p *Poller) listPackages(ctx context.Context, gvr schema.GroupVersionResource) ([]store.PackageInfo, error) {
+	ri := p.client.Resource(gvr)
+
+	var pkgs []store.PackageInfo
+	var continueToken string
+	for {
+		opts := metav1.ListOptions{
+			Limit:    500,
+			Continue: continueToken,
+		}
+		list, err := ri.List(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, item := range list.Items {
+			pkgs = append(pkgs, UnstructuredToPackage(item, gvr))
+		}
+
+		continueToken = list.GetContinue()
+		if continueToken == "" {
+			break
+		}
+	}
+	return pkgs, nil
 }
 
 // listXRs lists XRs for a specific GVR and optional namespace.

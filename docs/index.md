@@ -12,7 +12,7 @@ hide:
   <img src="https://img.shields.io/badge/Crossplane-2.0+-7C3AED?style=flat" alt="Crossplane">
 </p>
 
-A minimal, read-only Prometheus exporter for [Crossplane](https://www.crossplane.io/) claims, composite resources (XRs), and XR-linked provider managed resources (MRs).
+A minimal, read-only Prometheus exporter for [Crossplane](https://www.crossplane.io/) claims, composite resources (XRs), XR-linked provider managed resources (MRs), and low-cardinality package inventory (Providers, Configurations, Functions).
 
 It polls the Kubernetes API via the dynamic client, aggregates resource counts by meaningful labels, and exposes them as Prometheus gauge metrics on `/metrics`.
 

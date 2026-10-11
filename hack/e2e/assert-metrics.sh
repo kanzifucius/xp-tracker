@@ -21,6 +21,9 @@ EXPECTED_MRS_MIN=1
 CLAIM_LABELS="group kind version namespace creator team claim_name synced ready reason paused deleting"
 XR_LABELS="group kind version namespace name claim_name claim_namespace synced ready reason paused deleting"
 MR_LABELS="group kind version namespace name xr_name claim_name claim_namespace provider provider_config external_name management_policies synced ready reason paused deleting"
+PACKAGE_LABELS="kind name healthy installed"
+# Function from hack/samples/functions.yaml is always applied; Provider may lag on pull.
+EXPECTED_PACKAGES_MIN=1
 
 die() {
   echo "assert-metrics: $*" >&2
@@ -100,8 +103,9 @@ sum_metric_kind() {
   local metric="$1"
   local kind="$2"
   local metrics="$3"
+  # Match kind as the first label ({kind=...) or a later one (,kind=...).
   printf '%s\n' "${metrics}" | awk -v metric="${metric}" -v kind="${kind}" '
-    index($0, metric "{") == 1 && $0 ~ "(^|,)kind=\"" kind "\"" { sum += $NF }
+    index($0, metric "{") == 1 && $0 ~ "[{,]kind=\"" kind "\"" { sum += $NF }
     END { print sum + 0 }
   '
 }
@@ -202,8 +206,9 @@ assert_inventory() {
   printf '%s\n' "${metrics}" | grep -q '^crossplane_claims_total{' || { echo "metrics missing crossplane_claims_total"; return 1; }
   printf '%s\n' "${metrics}" | grep -q '^crossplane_xr_total{' || { echo "metrics missing crossplane_xr_total"; return 1; }
   printf '%s\n' "${metrics}" | grep -q '^crossplane_mr_total{' || { echo "metrics missing crossplane_mr_total"; return 1; }
+  printf '%s\n' "${metrics}" | grep -q '^crossplane_packages_total{' || { echo "metrics missing crossplane_packages_total"; return 1; }
 
-  local claims widgets gadgets apps xwidgets xgadgets mrs cluster_nops
+  local claims widgets gadgets apps xwidgets xgadgets mrs cluster_nops packages functions
   claims="$(sum_metric crossplane_claims_total "${metrics}")"
   widgets="$(sum_metric_kind crossplane_claims_total Widget "${metrics}")"
   gadgets="$(sum_metric_kind crossplane_claims_total Gadget "${metrics}")"
@@ -212,6 +217,8 @@ assert_inventory() {
   xgadgets="$(sum_metric_kind crossplane_xr_total XGadget "${metrics}")"
   mrs="$(sum_metric crossplane_mr_total "${metrics}")"
   cluster_nops="$(sum_metric_kind crossplane_mr_total ClusterNopResource "${metrics}")"
+  packages="$(sum_metric crossplane_packages_total "${metrics}")"
+  functions="$(sum_metric_kind crossplane_packages_total Function "${metrics}")"
 
   [ "${claims}" -eq "${EXPECTED_CLAIMS}" ] || { echo "expected ${EXPECTED_CLAIMS} claims, got ${claims}"; return 1; }
   [ "${widgets}" -eq "${EXPECTED_WIDGETS}" ] || { echo "expected ${EXPECTED_WIDGETS} Widget claims, got ${widgets}"; return 1; }
@@ -221,14 +228,19 @@ assert_inventory() {
   [ "${xgadgets}" -eq "${EXPECTED_XGADGETS}" ] || { echo "expected ${EXPECTED_XGADGETS} XGadget XRs, got ${xgadgets}"; return 1; }
   [ "${mrs}" -ge "${EXPECTED_MRS_MIN}" ] || { echo "expected >= ${EXPECTED_MRS_MIN} MRs, got ${mrs}"; return 1; }
   [ "${cluster_nops}" -ge "${EXPECTED_MRS_MIN}" ] || { echo "expected >= ${EXPECTED_MRS_MIN} ClusterNopResource MRs, got ${cluster_nops}"; return 1; }
+  [ "${packages}" -ge "${EXPECTED_PACKAGES_MIN}" ] || { echo "expected >= ${EXPECTED_PACKAGES_MIN} packages, got ${packages}"; return 1; }
+  [ "${functions}" -ge 1 ] || { echo "expected >= 1 Function package, got ${functions}"; return 1; }
 
   require_labels crossplane_claims_total "${CLAIM_LABELS}" "${metrics}"
   require_labels crossplane_xr_total "${XR_LABELS}" "${metrics}"
   require_labels crossplane_mr_total "${MR_LABELS}" "${metrics}"
+  require_labels crossplane_packages_total "${PACKAGE_LABELS}" "${metrics}"
   require_values crossplane_claims_total namespace "${metrics}" team-alpha team-beta team-gamma
   require_values crossplane_claims_total kind "${metrics}" Widget Gadget
   require_values crossplane_xr_total kind "${metrics}" App XWidget XGadget
   require_values crossplane_mr_total kind "${metrics}" ClusterNopResource
+  require_values crossplane_packages_total kind "${metrics}" Function
+  require_values crossplane_packages_total name "${metrics}" function-patch-and-transform
   require_nonempty_values crossplane_mr_total xr_name "${metrics}"
   require_value_substring crossplane_mr_total provider "nop" "${metrics}"
 }
@@ -249,7 +261,7 @@ while true; do
   fi
   now="$(date +%s)"
   if [ $((now - start)) -ge "${TIMEOUT_SECONDS}" ]; then
-    printf '%s\n' "${metrics}" | grep -E '^crossplane_(claims|xr|mr)_total' || true
+    printf '%s\n' "${metrics}" | grep -E '^crossplane_(claims|xr|mr|packages)_total' || true
     die "inventory assertions did not pass within ${TIMEOUT_SECONDS}s: ${last_err}"
   fi
   sleep 3

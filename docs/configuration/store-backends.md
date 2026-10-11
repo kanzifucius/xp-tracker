@@ -1,6 +1,6 @@
 # Store Backends
 
-xp-tracker uses a pluggable store interface for holding claim, XR, and MR metadata in memory. By default, data lives only in memory and is lost on restart. For workloads that restart frequently, an S3 persistent backend is available.
+xp-tracker uses a pluggable store interface for holding claim, XR, MR, and package metadata in memory. By default, data lives only in memory and is lost on restart. For workloads that restart frequently, an S3 persistent backend is available.
 
 ## Store interface
 

@@ -4,12 +4,14 @@
 
 This repository is a **single Go product**: `xp-tracker`, a read-only Prometheus
 exporter for Crossplane that exposes inventory and status metrics for claims,
-composite resources (XRs), and XR-linked managed resources (MRs). Claim series
-carry `creator`/`team`/`namespace` attribution; XR and MR series carry identity
-and claim-linkage labels; all carry per-resource status (`ready`, `reason`,
-`paused`, `deleting`). Composition is resolved internally but is **not** a
-metric dimension. The entrypoint is `cmd/exporter`; the binary serves `:8080`
-with `/metrics`, `/healthz`, and `/readyz`.
+composite resources (XRs), XR-linked managed resources (MRs), and low-cardinality
+package meta-types (Providers, Configurations, Functions). Claim series carry
+`creator`/`team`/`namespace` attribution; XR and MR series carry identity and
+claim-linkage labels; package series carry `kind`/`name`/`healthy`/`installed`;
+claim/XR/MR series also carry per-resource status (`ready`, `reason`, `paused`,
+`deleting`). Composition is resolved internally but is **not** a metric
+dimension. The entrypoint is `cmd/exporter`; the binary serves `:8080` with
+`/metrics`, `/healthz`, and `/readyz`.
 
 ### Toolchain
 

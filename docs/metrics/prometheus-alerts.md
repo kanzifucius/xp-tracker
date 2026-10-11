@@ -11,6 +11,7 @@ A useful alert set should cover:
 - Exporter pipeline health (is xp-tracker collecting reliably?)
 - Data freshness (are metrics still being updated?)
 - Resource health signals (are claims/XRs becoming not-ready?)
+- Package health (are Providers/Functions installed and healthy?)
 
 ## Suggested severities
 
@@ -156,6 +157,27 @@ spec:
             summary: high number of not-ready claims
             description: |
               More than 25 claims are currently not ready.
+
+        - alert: XpTrackerPackageUnhealthy
+          expr: sum(crossplane_packages_total{healthy="false"}) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Crossplane package is unhealthy
+            description: |
+              At least one Provider, Configuration, or Function has Healthy=False.
+              Check package revisions and controller logs.
+
+        - alert: XpTrackerProviderNotInstalled
+          expr: sum(crossplane_packages_total{kind="Provider",installed="false"}) > 0
+          for: 20m
+          labels:
+            severity: critical
+          annotations:
+            summary: Crossplane Provider is not installed
+            description: |
+              A Provider package has Installed=False for more than 20 minutes.
 ```
 
 ## Tuning guidance

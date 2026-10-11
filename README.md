@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Crossplane-2.0+-7C3AED?style=flat" alt="Crossplane">
 </p>
 
-A minimal, read-only Prometheus exporter for Crossplane legacy claims, composite resources (XRs), and XR-linked provider managed resources (MRs). It supports both legacy Crossplane v1 claim workflows and Crossplane v2 namespaced resources, polls the Kubernetes API via the dynamic client, aggregates resource counts by meaningful labels, and exposes them on `/metrics`.
+A minimal, read-only Prometheus exporter for Crossplane legacy claims, composite resources (XRs), XR-linked provider managed resources (MRs), and low-cardinality package inventory (Providers, Configurations, Functions). It supports both legacy Crossplane v1 claim workflows and Crossplane v2 namespaced resources, polls the Kubernetes API via the dynamic client, aggregates resource counts by meaningful labels, and exposes them on `/metrics`.
 
 ## Why xp-tracker?
 
@@ -44,6 +44,7 @@ Standard Crossplane metrics have no concept of **creator**, **team**, **per-reso
 | Readiness ratio by namespace / team | -- | Yes |
 | XR count by kind / claim linkage | -- | Yes |
 | MR count by provider / claim | -- | Yes |
+| Provider / Function / Configuration health | -- | Yes |
 | Stuck or not-ready resources by reason | -- | Yes |
 
 > **In short:** Crossplane tells you how the *controller* is doing. xp-tracker tells you what *resources* exist, who owns them, and whether they're healthy -- the information platform teams need to run an internal developer platform.
@@ -77,7 +78,7 @@ Together, the two tools cover the full local platform-engineering workflow: **ki
                        |  (pkg/kube)     |  for each discovered GVR
                        +--------+--------+  skips Persist on errors
                                 |
-                       ReplaceClaims / ReplaceXRs / ReplaceMRs
+                       ReplaceClaims / ReplaceXRs / ReplaceMRs / ReplacePackages
                        EnrichClaimCompositions / EnrichXRClaims / EnrichMRClaims
                                 |
                        +--------v--------+

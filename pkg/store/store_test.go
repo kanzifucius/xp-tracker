@@ -229,6 +229,40 @@ func TestReplaceMRs(t *testing.T) {
 	}
 }
 
+func TestReplacePackages(t *testing.T) {
+	s := New()
+	s.ReplacePackages("pkg.crossplane.io/v1/providers", []PackageInfo{
+		{GVR: "pkg.crossplane.io/v1/providers", Kind: "Provider", Name: "provider-nop", Healthy: true, Installed: true},
+	})
+	s.ReplacePackages("pkg.crossplane.io/v1beta1/functions", []PackageInfo{
+		{GVR: "pkg.crossplane.io/v1beta1/functions", Kind: "Function", Name: "function-patch-and-transform", Healthy: false, Installed: true},
+	})
+	if s.PackageCount() != 2 {
+		t.Fatalf("expected 2 packages, got %d", s.PackageCount())
+	}
+
+	// Same metadata name across kinds must not collide.
+	s.ReplacePackages("pkg.crossplane.io/v1/providers", []PackageInfo{
+		{GVR: "pkg.crossplane.io/v1/providers", Kind: "Provider", Name: "shared", Healthy: true, Installed: true},
+	})
+	s.ReplacePackages("pkg.crossplane.io/v1beta1/functions", []PackageInfo{
+		{GVR: "pkg.crossplane.io/v1beta1/functions", Kind: "Function", Name: "shared", Healthy: true, Installed: true},
+	})
+	if s.PackageCount() != 2 {
+		t.Fatalf("expected provider+function with same name to coexist, got %d", s.PackageCount())
+	}
+
+	// Stale GVR entries are removed on replace.
+	s.ReplacePackages("pkg.crossplane.io/v1/providers", nil)
+	if s.PackageCount() != 1 {
+		t.Fatalf("expected 1 package after clearing providers, got %d", s.PackageCount())
+	}
+	pkgs := s.SnapshotPackages()
+	if len(pkgs) != 1 || pkgs[0].Kind != "Function" {
+		t.Fatalf("expected remaining Function, got %#v", pkgs)
+	}
+}
+
 func TestEnrichMRClaims(t *testing.T) {
 	s := New()
 

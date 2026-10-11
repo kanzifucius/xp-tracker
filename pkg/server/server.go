@@ -27,12 +27,13 @@ type Server struct {
 }
 
 // New creates a new metrics Server.
-// It registers claim and XR collectors with a dedicated Prometheus registry.
+// It registers claim, XR, MR, and package collectors with a dedicated Prometheus registry.
 func New(addr string, s store.Store) *Server {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(metrics.NewClaimCollector(s))
 	registry.MustRegister(metrics.NewXRCollector(s))
 	registry.MustRegister(metrics.NewMRCollector(s))
+	registry.MustRegister(metrics.NewPackageCollector(s))
 	metrics.RegisterSelfMetrics(registry)
 
 	srv := &Server{

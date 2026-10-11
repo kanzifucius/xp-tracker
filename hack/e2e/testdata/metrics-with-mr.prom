@@ -23,3 +23,7 @@ crossplane_xr_total{group="samples.xptracker.dev",kind="App",version="v1alpha1",
 # HELP crossplane_mr_total Number of Crossplane provider managed resources
 # TYPE crossplane_mr_total gauge
 crossplane_mr_total{group="nop.crossplane.io",kind="ClusterNopResource",version="v1alpha1",namespace="",name="e2e-xr-linked-nop-1",xr_name="web-widget-1-abc",claim_name="web-widget-1",claim_namespace="team-alpha",provider="provider-nop",provider_config="default",external_name="",management_policies="*",synced="false",ready="false",reason="Unknown",paused="false",deleting="false"} 1
+# HELP crossplane_packages_total Number of Crossplane packages
+# TYPE crossplane_packages_total gauge
+crossplane_packages_total{kind="Function",name="function-patch-and-transform",healthy="true",installed="true"} 1
+crossplane_packages_total{kind="Provider",name="provider-nop",healthy="true",installed="true"} 1

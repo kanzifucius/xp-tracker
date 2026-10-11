@@ -8,6 +8,8 @@
 *[Composition]: A template that defines how to create cloud resources when a composite resource is created
 *[Provider]: A Crossplane package that enables management of external resources (AWS, Azure, GCP, etc.)
 *[ProviderConfig]: Configuration for authenticating a Crossplane provider with a cloud service
+*[Configuration]: A Crossplane package that installs XRDs, Compositions, and related resources
+*[Function]: A Crossplane package that runs composition pipeline steps
 *[MR]: Managed Resource - A Crossplane resource that represents an external cloud resource
 
 <!-- Kubernetes terms -->
