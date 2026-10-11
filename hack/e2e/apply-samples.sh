@@ -59,6 +59,7 @@ apply_xr_linked_mrs() {
   fi
 
   echo "Applying XR-linked ClusterNopResource for XR ${xr_name}..."
+  # Real provider-nop CRDs require spec (forProvider); empty metadata-only objects are rejected.
   cat <<EOF | kubectl apply -f -
 apiVersion: nop.crossplane.io/v1alpha1
 kind: ClusterNopResource
@@ -66,6 +67,10 @@ metadata:
   name: e2e-xr-linked-nop-1
   labels:
     crossplane.io/composite: ${xr_name}
+spec:
+  forProvider:
+    fields:
+      e2e: "true"
 EOF
 
   # Optional second MR for a different XR when present (still non-fatal if only one XR).
@@ -79,6 +84,10 @@ metadata:
   name: e2e-xr-linked-nop-2
   labels:
     crossplane.io/composite: ${xr_name_2}
+spec:
+  forProvider:
+    fields:
+      e2e: "true"
 EOF
   fi
 
