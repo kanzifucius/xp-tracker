@@ -1,13 +1,13 @@
 module github.com/kanzifucius/xp-tracker
 
-go 1.25.5
+go 1.26.0
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.24.0
 	k8s.io/apimachinery v0.35.3
 )
 
