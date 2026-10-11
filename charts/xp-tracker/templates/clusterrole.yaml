@@ -1,0 +1,23 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "xp-tracker.fullname" . }}
+  labels:
+    {{- include "xp-tracker.labels" . | nindent 4 }}
+rules:
+  {{- if .Values.rbac.rules }}
+  {{- toYaml .Values.rbac.rules | nindent 2 }}
+  {{- else }}
+  # ============================================================================
+  # WARNING — PRODUCTION SECURITY NOTICE
+  # ============================================================================
+  # The default rules below grant read-only access to ALL resources in ALL API
+  # groups (same as deploy/base). Scope these before production use.
+  # See docs/deployment/rbac.md and deploy/overlays/example/.
+  # ============================================================================
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
+{{- end }}

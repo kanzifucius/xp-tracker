@@ -1,0 +1,19 @@
+apiVersion: v2
+name: xp-tracker
+description: Thin Helm chart wrapping deploy/base for the xp-tracker Crossplane Prometheus exporter
+type: application
+# Chart version tracks packaging; bump when templates or values change.
+version: 0.1.0
+# Application version matches a published image tag (not :latest).
+appVersion: "v0.4.0"
+keywords:
+  - crossplane
+  - prometheus
+  - metrics
+  - exporter
+home: https://github.com/kanzifucius/xp-tracker
+sources:
+  - https://github.com/kanzifucius/xp-tracker
+maintainers:
+  - name: Kanzi
+    url: https://github.com/kanzifucius

@@ -130,7 +130,7 @@ graph TD
 
     ---
 
-    Kustomize base and overlays
+    Kustomize base/overlays and Helm chart
 
 - :material-heart-pulse: **[Health Endpoints](api/health.md)**
 

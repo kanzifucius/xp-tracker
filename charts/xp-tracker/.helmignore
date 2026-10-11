@@ -1,0 +1,7 @@
+# Patterns to ignore when packaging.
+.DS_Store
+.git/
+.gitignore
+*.md
+.charts/
+ci/

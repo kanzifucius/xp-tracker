@@ -158,6 +158,7 @@ nav:
       - Prometheus Alerts: metrics/prometheus-alerts.md
   - Deployment:
       - Kustomize: deployment/kustomize.md
+      - Helm: deployment/helm.md
       - RBAC: deployment/rbac.md
       - Prometheus Scraping: deployment/prometheus.md
   - API:

@@ -1,0 +1,67 @@
+# Default values for xp-tracker.
+# This chart is a thin wrap of deploy/base (SA, RBAC, ConfigMap, Deployment, Service).
+
+# Override the name used for resources. Defaults match deploy/base.
+nameOverride: "crossplane-metrics-exporter"
+fullnameOverride: ""
+
+# Container image. Tag must be set (defaults to Chart.appVersion). Do not use :latest.
+image:
+  repository: ghcr.io/kanzifucius/xp-tracker
+  # Empty tag falls back to .Chart.AppVersion; set explicitly to pin another release.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Single replica avoids double-counting metrics (same constraint as deploy/base).
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  annotations: {}
+  # Defaults to fullname when empty.
+  name: ""
+
+rbac:
+  create: true
+  # When empty, uses the same broad read-only rules as deploy/base.
+  # For production, set scoped rules (see docs/deployment/rbac.md).
+  rules: []
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Exporter environment variables rendered into the ConfigMap (deploy/base parity).
+# Only non-empty string values are emitted. See docs/configuration/environment-variables.md.
+config:
+  POLL_INTERVAL_SECONDS: "30"
+  METRICS_ADDR: ":8080"
+  # DISCOVERY_INTERVAL_SECONDS: "300"
+  # KUBE_NAMESPACE_SCOPE: ""
+  # CREATOR_ANNOTATION_KEY: ""
+  # TEAM_ANNOTATION_KEY: ""
+  # COMPOSITION_LABEL_KEY: "crossplane.io/composition-name"
+  # CLAIM_GVRS: ""
+  # XR_GVRS: ""
+  # STORE_BACKEND: "memory"
+  # S3_BUCKET: ""
+  # S3_KEY_PREFIX: "xp-tracker"
+  # S3_REGION: "us-east-1"
+  # S3_ENDPOINT: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podAnnotations: {}
+podLabels: {}
