@@ -548,10 +548,10 @@ func TestPoller_FirstPollDoneAfterPollCompletes(t *testing.T) {
 	})
 
 	releaseList := make(chan struct{})
-	var listStarted sync.WaitGroup
-	listStarted.Add(1)
+	listStarted := make(chan struct{})
+	var signalStart sync.Once
 	client.PrependReactor("list", "*", func(action clienttesting.Action) (bool, runtime.Object, error) {
-		listStarted.Done()
+		signalStart.Do(func() { close(listStarted) })
 		<-releaseList
 		return false, nil, nil
 	})
@@ -575,7 +575,11 @@ func TestPoller_FirstPollDoneAfterPollCompletes(t *testing.T) {
 		poller.poll(context.Background())
 	}()
 
-	listStarted.Wait()
+	select {
+	case <-listStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("list reactor never started")
+	}
 
 	select {
 	case <-poller.FirstPollDone():
@@ -593,6 +597,7 @@ func TestPoller_FirstPollDoneAfterPollCompletes(t *testing.T) {
 		t.Fatal("FirstPollDone not closed after poll finished")
 	}
 
-	// A second cycle must not panic (channel already closed).
+	// Clear the blocking reactor before a second cycle.
+	client.ReactionChain = client.ReactionChain[1:]
 	poller.poll(context.Background())
 }
