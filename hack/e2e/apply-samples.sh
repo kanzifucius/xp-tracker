@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Apply hack/samples in CI/local e2e order. Function Healthy is non-fatal.
+# After claim/XR inventory exists, ensure at least one XR-linked ClusterNopResource
+# so crossplane_mr_total assertions do not depend on composition pipeline readiness.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -46,6 +48,53 @@ wait_count() {
   done
 }
 
+# Apply at least one ClusterNopResource labelled with crossplane.io/composite so the
+# exporter polls it. Does not require function Healthy or provider reconcile.
+apply_xr_linked_mrs() {
+  local xr_name
+  xr_name="$(kubectl get xwidgets.samples.xptracker.dev -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  if [ -z "${xr_name}" ]; then
+    echo "no XWidget XR found to link sample MRs" >&2
+    return 1
+  fi
+
+  echo "Applying XR-linked ClusterNopResource for XR ${xr_name}..."
+  # Real provider-nop CRDs require spec (forProvider); empty metadata-only objects are rejected.
+  cat <<EOF | kubectl apply -f -
+apiVersion: nop.crossplane.io/v1alpha1
+kind: ClusterNopResource
+metadata:
+  name: e2e-xr-linked-nop-1
+  labels:
+    crossplane.io/composite: ${xr_name}
+spec:
+  forProvider:
+    fields:
+      e2e: "true"
+EOF
+
+  # Optional second MR for a different XR when present (still non-fatal if only one XR).
+  local xr_name_2
+  xr_name_2="$(kubectl get xwidgets.samples.xptracker.dev -o jsonpath='{.items[1].metadata.name}' 2>/dev/null || true)"
+  if [ -n "${xr_name_2}" ]; then
+    cat <<EOF | kubectl apply -f -
+apiVersion: nop.crossplane.io/v1alpha1
+kind: ClusterNopResource
+metadata:
+  name: e2e-xr-linked-nop-2
+  labels:
+    crossplane.io/composite: ${xr_name_2}
+spec:
+  forProvider:
+    fields:
+      e2e: "true"
+EOF
+  fi
+
+  wait_count clusternopresources.nop.crossplane.io 1
+  echo "XR-linked ClusterNopResource inventory is present (linked to ${xr_name})."
+}
+
 kubectl apply -f "${SAMPLES}/namespaces.yaml"
 kubectl apply -f "${SAMPLES}/functions.yaml"
 kubectl apply -f "${SAMPLES}/xrds.yaml"
@@ -77,4 +126,6 @@ wait_count xwidgets.samples.xptracker.dev 4
 wait_count xgadgets.samples.xptracker.dev 4
 wait_count apps.samples.xptracker.dev 2 -A
 
-echo "Sample inventory is present (8 claims, 8 claim XRs, 2 v2 Apps)."
+apply_xr_linked_mrs
+
+echo "Sample inventory is present (8 claims, 8 claim XRs, 2 v2 Apps, >=1 XR-linked MR)."

@@ -15,9 +15,12 @@ EXPECTED_GADGETS=4
 EXPECTED_APPS=2
 EXPECTED_XWIDGETS=4
 EXPECTED_XGADGETS=4
+# Minimum XR-linked MRs from apply-samples (composition may create more Nops).
+EXPECTED_MRS_MIN=1
 
 CLAIM_LABELS="group kind version namespace creator team claim_name synced ready reason paused deleting"
 XR_LABELS="group kind version namespace name claim_name claim_namespace synced ready reason paused deleting"
+MR_LABELS="group kind version namespace name xr_name claim_name claim_namespace provider provider_config external_name management_policies synced ready reason paused deleting"
 
 die() {
   echo "assert-metrics: $*" >&2
@@ -163,18 +166,52 @@ require_values() {
   done
 }
 
+require_nonempty_values() {
+  local metric="$1"
+  local label="$2"
+  local metrics="$3"
+  local values
+  values="$(label_values "${metric}" "${label}" "${metrics}")"
+  if [ -z "${values}" ]; then
+    echo "${metric} has no ${label} values"
+    return 1
+  fi
+  while IFS= read -r val; do
+    [ -n "${val}" ] || { echo "${metric} has empty ${label}"; return 1; }
+  done <<< "${values}"
+  echo "${metric} ${label} values are non-empty: $(printf '%s ' ${values})"
+}
+
+require_value_substring() {
+  local metric="$1"
+  local label="$2"
+  local needle="$3"
+  local metrics="$4"
+  local values
+  values="$(label_values "${metric}" "${label}" "${metrics}")"
+  if printf '%s\n' "${values}" | grep -qi "${needle}"; then
+    echo "${metric} ${label} matches /${needle}/i (have: $(printf '%s ' ${values}))"
+    return 0
+  fi
+  echo "${metric} ${label} has no value matching /${needle}/i (have: $(printf '%s ' ${values}))"
+  return 1
+}
+
 assert_inventory() {
   local metrics="$1"
   printf '%s\n' "${metrics}" | grep -q '^crossplane_claims_total{' || { echo "metrics missing crossplane_claims_total"; return 1; }
   printf '%s\n' "${metrics}" | grep -q '^crossplane_xr_total{' || { echo "metrics missing crossplane_xr_total"; return 1; }
+  printf '%s\n' "${metrics}" | grep -q '^crossplane_mr_total{' || { echo "metrics missing crossplane_mr_total"; return 1; }
 
-  local claims widgets gadgets apps xwidgets xgadgets
+  local claims widgets gadgets apps xwidgets xgadgets mrs cluster_nops
   claims="$(sum_metric crossplane_claims_total "${metrics}")"
   widgets="$(sum_metric_kind crossplane_claims_total Widget "${metrics}")"
   gadgets="$(sum_metric_kind crossplane_claims_total Gadget "${metrics}")"
   apps="$(sum_metric_kind crossplane_xr_total App "${metrics}")"
   xwidgets="$(sum_metric_kind crossplane_xr_total XWidget "${metrics}")"
   xgadgets="$(sum_metric_kind crossplane_xr_total XGadget "${metrics}")"
+  mrs="$(sum_metric crossplane_mr_total "${metrics}")"
+  cluster_nops="$(sum_metric_kind crossplane_mr_total ClusterNopResource "${metrics}")"
 
   [ "${claims}" -eq "${EXPECTED_CLAIMS}" ] || { echo "expected ${EXPECTED_CLAIMS} claims, got ${claims}"; return 1; }
   [ "${widgets}" -eq "${EXPECTED_WIDGETS}" ] || { echo "expected ${EXPECTED_WIDGETS} Widget claims, got ${widgets}"; return 1; }
@@ -182,12 +219,18 @@ assert_inventory() {
   [ "${apps}" -eq "${EXPECTED_APPS}" ] || { echo "expected ${EXPECTED_APPS} v2 App XRs, got ${apps}"; return 1; }
   [ "${xwidgets}" -eq "${EXPECTED_XWIDGETS}" ] || { echo "expected ${EXPECTED_XWIDGETS} XWidget XRs, got ${xwidgets}"; return 1; }
   [ "${xgadgets}" -eq "${EXPECTED_XGADGETS}" ] || { echo "expected ${EXPECTED_XGADGETS} XGadget XRs, got ${xgadgets}"; return 1; }
+  [ "${mrs}" -ge "${EXPECTED_MRS_MIN}" ] || { echo "expected >= ${EXPECTED_MRS_MIN} MRs, got ${mrs}"; return 1; }
+  [ "${cluster_nops}" -ge "${EXPECTED_MRS_MIN}" ] || { echo "expected >= ${EXPECTED_MRS_MIN} ClusterNopResource MRs, got ${cluster_nops}"; return 1; }
 
   require_labels crossplane_claims_total "${CLAIM_LABELS}" "${metrics}"
   require_labels crossplane_xr_total "${XR_LABELS}" "${metrics}"
+  require_labels crossplane_mr_total "${MR_LABELS}" "${metrics}"
   require_values crossplane_claims_total namespace "${metrics}" team-alpha team-beta team-gamma
   require_values crossplane_claims_total kind "${metrics}" Widget Gadget
   require_values crossplane_xr_total kind "${metrics}" App XWidget XGadget
+  require_values crossplane_mr_total kind "${metrics}" ClusterNopResource
+  require_nonempty_values crossplane_mr_total xr_name "${metrics}"
+  require_value_substring crossplane_mr_total provider "nop" "${metrics}"
 }
 
 if [ -z "${METRICS_FILE}" ]; then
@@ -206,7 +249,7 @@ while true; do
   fi
   now="$(date +%s)"
   if [ $((now - start)) -ge "${TIMEOUT_SECONDS}" ]; then
-    printf '%s\n' "${metrics}" | grep -E '^crossplane_(claims|xr)_total' || true
+    printf '%s\n' "${metrics}" | grep -E '^crossplane_(claims|xr|mr)_total' || true
     die "inventory assertions did not pass within ${TIMEOUT_SECONDS}s: ${last_err}"
   fi
   sleep 3
