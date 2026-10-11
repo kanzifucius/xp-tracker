@@ -2,7 +2,18 @@
 
 Example PromQL queries for building Grafana dashboards with xp-tracker metrics.
 
-For alerting rules and ready-to-use `PrometheusRule` examples, see [Prometheus Alerts](prometheus-alerts.md).
+For alerting rules and ready-to-use `PrometheusRule` examples, see [Prometheus Alerts](prometheus-alerts.md). A checked-in starter dashboard is available as [`xp-tracker-dashboard.json`](xp-tracker-dashboard.json).
+
+## Import the starter dashboard
+
+1. Ensure Grafana can query a Prometheus (or compatible) datasource that scrapes xp-tracker `/metrics`.
+2. In Grafana: **Dashboards** → **New** → **Import**.
+3. Upload `docs/metrics/xp-tracker-dashboard.json` from this repository (or paste its contents).
+4. Select your Prometheus datasource when prompted, then import.
+
+The dashboard covers claim/XR/MR inventory totals and readiness, store gauges (`xp_tracker_store_*`), poll duration/errors, and discovery self-metrics (`xp_tracker_discovery_*`, `xp_tracker_mrd_discovery_skipped_total`). Set the dashboard refresh close to your `POLL_INTERVAL_SECONDS` (default 30s).
+
+Panels use a `${datasource}` template variable so the same JSON works across Grafana organisations without editing panel UIDs.
 
 ## Claim queries
 
@@ -107,15 +118,58 @@ sum by (ready)(crossplane_xr_total)
 max by (name, claim_name, claim_namespace, synced, ready)(crossplane_xr_total)
 ```
 
-## Combined queries
+## MR queries
 
-### Total managed resources (claims + XRs)
+### XR-linked MRs by kind
 
 ```promql
-sum(crossplane_claims_total) + sum(crossplane_xr_total)
+sum by (kind)(crossplane_mr_total)
 ```
 
-### Overall readiness ratio
+### MR readiness ratio by provider
+
+```promql
+sum by (provider)(crossplane_mr_ready) / sum by (provider)(crossplane_mr_total)
+```
+
+### Not-ready MRs
+
+```promql
+sum(crossplane_mr_total) - sum(crossplane_mr_ready)
+```
+
+## Self-monitoring queries
+
+### Average poll duration
+
+```promql
+rate(xp_tracker_poll_duration_seconds_sum[5m]) / rate(xp_tracker_poll_duration_seconds_count[5m])
+```
+
+### Store size
+
+```promql
+xp_tracker_store_claims
+xp_tracker_store_xrs
+xp_tracker_store_mrs
+```
+
+### Discovery errors and MRD skips
+
+```promql
+rate(xp_tracker_discovery_runs_total{result="error"}[15m])
+sum(xp_tracker_mrd_discovery_skipped_total)
+```
+
+## Combined queries
+
+### Total inventory (claims + XRs + MRs)
+
+```promql
+sum(crossplane_claims_total) + sum(crossplane_xr_total) + sum(crossplane_mr_total)
+```
+
+### Overall readiness ratio (claims + XRs)
 
 ```promql
 (sum(crossplane_claims_ready) + sum(crossplane_xr_ready)) / (sum(crossplane_claims_total) + sum(crossplane_xr_total))
@@ -123,6 +177,7 @@ sum(crossplane_claims_total) + sum(crossplane_xr_total)
 
 ## Dashboard tips
 
+- Prefer the [starter dashboard JSON](xp-tracker-dashboard.json) for a quick inventory + exporter health view; extend panels from the queries above as needed.
 - **Single stat panels** work well for readiness ratios and total counts.
 - **Table panels** are useful for showing per-namespace or per-team breakdowns.
 - **Time series panels** show trends over time -- useful for spotting claim growth or readiness drops.

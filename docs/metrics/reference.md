@@ -1,6 +1,6 @@
 # Metrics Reference
 
-xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resources, plus six **self-monitoring** metrics for operational visibility.
+xp-tracker exposes eighteen Prometheus **gauge** metrics for Crossplane resources, plus nine **self-monitoring** metrics for operational visibility.
 
 ## Claim metrics
 

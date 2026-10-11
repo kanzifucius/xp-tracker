@@ -9,7 +9,7 @@ Thanks for your interest in contributing to xp-tracker. This document covers the
 - Go 1.25+ (or use [mise](https://mise.jdx.dev/): `mise install`)
 - Docker (for container builds)
 - kubectl
-- [kindplane](https://github.com/kanzi/kindplane) (recommended for local dev)
+- [kindplane](https://github.com/kanzifucius/kindplane) (recommended for local dev)
 - [golangci-lint](https://golangci-lint.run/) `2.9.0` (pinned in `.mise.toml`; CI uses the same version)
 
 ### Development Setup
