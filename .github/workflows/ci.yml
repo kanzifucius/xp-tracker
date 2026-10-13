@@ -50,9 +50,6 @@ jobs:
           if-no-files-found: error
 
       - name: Run govulncheck
-        # Soft-gated until Go toolchain moves past 1.25.5 (stdlib findings).
-        # Flip continue-on-error to false after a Go patch/1.26 bump.
-        continue-on-error: true
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...

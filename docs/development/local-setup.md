@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.25+ (or use [mise](https://mise.jdx.dev/): `mise install`)
+- Go 1.26.9+ (or use [mise](https://mise.jdx.dev/): `mise install`)
 - Docker (for container builds)
 - kubectl
 - [kindplane](https://github.com/kanzifucius/kindplane) (recommended for local dev)
@@ -132,7 +132,7 @@ The project uses [mise](https://mise.jdx.dev/) for tool version pinning via `.mi
 
 | Tool | Version |
 |---|---|
-| Go | 1.25.5 |
+| Go | 1.26.9 |
 | golangci-lint | 2.9.0 |
 | kubectl | 1.34.2 |
 
