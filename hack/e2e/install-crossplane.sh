@@ -75,11 +75,25 @@ apply_clusternop_fallback() {
   fi
 
   # Second document: CRD — skip when provider-nop already established it.
+  # Retry: provider reconcile may create the CRD between the check and SSA, yielding
+  # a transient AlreadyExists that would otherwise abort e2e under set -e.
   if crd_established; then
     echo "CRD ${PROVIDER_NOP_CRD} already present; skipping fallback CRD apply"
   else
-    awk 'BEGIN{p=0} /^---[[:space:]]*$/{p=1; next} p{print}' "${fallback}" | \
-      kubectl apply --server-side --force-conflicts --field-manager="${field_manager}" -f -
+    local attempt
+    for attempt in 1 2 3; do
+      if awk 'BEGIN{p=0} /^---[[:space:]]*$/{p=1; next} p{print}' "${fallback}" | \
+        kubectl apply --server-side --force-conflicts --field-manager="${field_manager}" -f -
+      then
+        break
+      fi
+      if [ "${attempt}" -eq 3 ]; then
+        echo "fallback CRD apply failed after ${attempt} attempts" >&2
+        return 1
+      fi
+      echo "fallback CRD apply attempt ${attempt} failed; retrying..." >&2
+      sleep 1
+    done
   fi
 }
 
