@@ -15,7 +15,7 @@ dimension. The entrypoint is `cmd/exporter`; the binary serves `:8080` with
 
 ### Toolchain
 
-- **Go** is provided by the base image and the pinned toolchain (`go 1.25.5`,
+- **Go** is provided by the base image and the pinned toolchain (`go 1.26.9`,
   see `go.mod` / `.mise.toml`) is fetched automatically on first `go` invocation.
 - **golangci-lint 2.9.0** is installed to `/usr/local/bin` by the environment
   update script, so `make lint` works with no PATH changes. `mise` itself is

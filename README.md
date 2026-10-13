@@ -4,7 +4,7 @@
   <a href="https://github.com/kanzifucius/xp-tracker/actions/workflows/ci.yml"><img src="https://github.com/kanzifucius/xp-tracker/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/kanzifucius/xp-tracker/releases/latest"><img src="https://img.shields.io/github/v/release/kanzifucius/xp-tracker?style=flat" alt="Release"></a>
   <a href="https://kanzifucius.github.io/xp-tracker/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=flat&logo=github" alt="Documentation"></a>
-  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go" alt="Go Version">
+  <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go" alt="Go Version">
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/Crossplane-2.0+-7C3AED?style=flat" alt="Crossplane">
 </p>
@@ -505,7 +505,7 @@ make docker-build IMAGE=myregistry.io/xp-tracker TAG=v0.1.0
 make docker-push IMAGE=myregistry.io/xp-tracker TAG=v0.1.0
 ```
 
-The Dockerfile uses a multi-stage build with BuildKit multi-arch support (`linux/amd64` + `linux/arm64`). Build stage: `golang:1.25-alpine`. Runtime stage: `gcr.io/distroless/static-debian12:nonroot`. The final image is ~10 MB and runs as a non-root user.
+The Dockerfile uses a multi-stage build with BuildKit multi-arch support (`linux/amd64` + `linux/arm64`). Build stage: `golang:1.26-alpine`. Runtime stage: `gcr.io/distroless/static-debian12:nonroot`. The final image is ~10 MB and runs as a non-root user.
 
 ### Version and build info
 
@@ -573,7 +573,7 @@ This triggers the release workflow, which:
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - A Kubernetes cluster (kind, k3d, minikube, etc.) with Crossplane installed
 - `golangci-lint` for linting
 - [mise](https://mise.jdx.dev/) (recommended) -- run `mise install` to set up pinned tool versions
