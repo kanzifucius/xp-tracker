@@ -1,6 +1,8 @@
 # Fallback Active MRD + CRD when the provider-nop package pull from xpkg.upbound.io
 # fails (same flake class as function Healthy). Enough for xp-tracker MRD discovery
 # and ClusterNopResource inventory metrics; no provider controller required.
+# Applied via server-side apply (and CRD skip-if-exists) in hack/e2e/install-crossplane.sh
+# so a partially established provider CRD does not fail with AlreadyExists.
 apiVersion: apiextensions.crossplane.io/v1alpha1
 kind: ManagedResourceDefinition
 metadata:
