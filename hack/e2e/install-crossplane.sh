@@ -57,6 +57,46 @@ crd_established() {
   kubectl get crd "${PROVIDER_NOP_CRD}" >/dev/null 2>&1
 }
 
+# Apply hack/samples/mrd-clusternop-fallback.yaml idempotently. provider-nop may have
+# partially established the CRD (and sometimes a non-Active MRD); applying the full
+# multi-doc file with client-side apply then fails with AlreadyExists on the CRD.
+apply_clusternop_fallback() {
+  local fallback="${SAMPLES}/mrd-clusternop-fallback.yaml"
+  local field_manager=xp-tracker-e2e
+  echo "Applying sample Active MRD fallback (idempotent)..."
+
+  # First document: ManagedResourceDefinition (server-side apply is idempotent).
+  awk 'BEGIN{p=1} /^---[[:space:]]*$/{exit} {print}' "${fallback}" | \
+    kubectl apply --server-side --force-conflicts --field-manager="${field_manager}" -f -
+  if ! mrd_active; then
+    kubectl patch mrd "${PROVIDER_NOP_MRD}" --type=merge \
+      --field-manager="${field_manager}" \
+      -p '{"spec":{"state":"Active"}}'
+  fi
+
+  # Second document: CRD — skip when provider-nop already established it.
+  # Retry: provider reconcile may create the CRD between the check and SSA, yielding
+  # a transient AlreadyExists that would otherwise abort e2e under set -e.
+  if crd_established; then
+    echo "CRD ${PROVIDER_NOP_CRD} already present; skipping fallback CRD apply"
+  else
+    local attempt
+    for attempt in 1 2 3; do
+      if awk 'BEGIN{p=0} /^---[[:space:]]*$/{p=1; next} p{print}' "${fallback}" | \
+        kubectl apply --server-side --force-conflicts --field-manager="${field_manager}" -f -
+      then
+        break
+      fi
+      if [ "${attempt}" -eq 3 ]; then
+        echo "fallback CRD apply failed after ${attempt} attempts" >&2
+        return 1
+      fi
+      echo "fallback CRD apply attempt ${attempt} failed; retrying..." >&2
+      sleep 1
+    done
+  fi
+}
+
 echo "Waiting up to ${PROVIDER_WAIT_SECONDS}s for Active MRD ${PROVIDER_NOP_MRD} and CRD..."
 start="$(date +%s)"
 while true; do
@@ -66,7 +106,7 @@ while true; do
   fi
   if [ $(($(date +%s) - start)) -ge "${PROVIDER_WAIT_SECONDS}" ]; then
     echo "provider-nop MRD/CRD not ready within ${PROVIDER_WAIT_SECONDS}s; applying sample Active MRD fallback"
-    kubectl apply -f "${SAMPLES}/mrd-clusternop-fallback.yaml"
+    apply_clusternop_fallback
     # Crossplane may own the CRD after Active MRD reconcile; wait either way.
     kubectl wait --for=condition=Established "crd/${PROVIDER_NOP_CRD}" --timeout=120s
     if ! mrd_active; then
