@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.26+ (or use [mise](https://mise.jdx.dev/): `mise install`)
+- Go 1.26.9+ (or use [mise](https://mise.jdx.dev/): `mise install`)
 - Docker (for container builds)
 - kubectl
 - [kindplane](https://github.com/kanzifucius/kindplane) (recommended for local dev)
