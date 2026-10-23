@@ -13,6 +13,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `TEAM_ANNOTATION_KEY` | No | `""` | Annotation key for team attribution |
 | `COMPOSITION_LABEL_KEY` | No | `crossplane.io/composition-name` | Label key on XRs for composition name (internal enrichment only; not exposed as a metric label) |
 | `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
+| `MR_XR_PARENT_LABELS` | No | `true` | When true, `crossplane_mr_*` include typed XR parent labels `xr_kind`, `xr_namespace`, `xr_group`. Set `false`/`0`/`no` to omit them |
 | `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | No | `300` | Seconds between XRD/MRD re-discovery cycles. `0` disables periodic re-discovery (startup discovery still runs once) |
@@ -116,10 +117,12 @@ Native Crossplane v2 XRs have no claims, so their claim metric labels remain emp
 
 The `COMPOSITE_LABEL_KEY` tells xp-tracker which label on provider MRs links them to a composite (XR). The default (`crossplane.io/composite`) matches standard Crossplane installations.
 
-MRs are only polled when this label is present. Claim linkage is enriched in two steps:
+MRs are only polled when this label is present. After each poll, xp-tracker looks up the XR named by the composite label (prefer the MR's namespace, then a cluster-scoped XR) and:
 
-1. Direct `crossplane.io/claim-name` and `crossplane.io/claim-namespace` labels on the MR are used when present
-2. Otherwise, xp-tracker looks up the XR named by the composite label in the MR's namespace, falling back to a cluster-scoped XR, and copies the XR's claim name and namespace when present
+1. Always copies typed XR identity into store fields used for `xr_kind`, `xr_namespace`, and `xr_group` metric labels when `MR_XR_PARENT_LABELS` is true (the default)
+2. Copies legacy `claim_name` / `claim_namespace` from the XR only when those fields are not already set from MR labels
+
+Primary ownership for modern (v2) fleets is XR → MR via `xr_name` plus the typed `xr_*` labels. Empty `claim_*` on native v2 trees is expected.
 
 ## Deployment via ConfigMap
 

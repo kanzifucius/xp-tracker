@@ -120,10 +120,26 @@ max by (name, claim_name, claim_namespace, synced, ready)(crossplane_xr_total)
 
 ## MR queries
 
+Modern ownership is **XR → MR**. Prefer `xr_name` / `xr_kind` / `xr_namespace` / `xr_group` (enabled by default via `MR_XR_PARENT_LABELS`). Do not require `claim_*` — those are empty on native Crossplane v2 trees.
+
 ### XR-linked MRs by kind
 
 ```promql
 sum by (kind)(crossplane_mr_total)
+```
+
+### MRs by parent XR
+
+```promql
+sum by (xr_group, xr_kind, xr_namespace, xr_name)(crossplane_mr_total)
+```
+
+### MRs for one XR (typed parent)
+
+```promql
+max by (name, namespace, synced, ready)(
+  crossplane_mr_total{xr_group="example.org", xr_kind="App", xr_namespace="default", xr_name="my-app"}
+)
 ```
 
 ### MR readiness ratio by provider
@@ -136,6 +152,12 @@ sum by (provider)(crossplane_mr_ready) / sum by (provider)(crossplane_mr_total)
 
 ```promql
 sum(crossplane_mr_total) - sum(crossplane_mr_ready)
+```
+
+### Legacy: MRs by claim (v1 claim path only)
+
+```promql
+sum by (claim_namespace, claim_name)(crossplane_mr_total{claim_name!=""})
 ```
 
 ## Self-monitoring queries

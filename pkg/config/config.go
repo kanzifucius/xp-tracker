@@ -79,6 +79,10 @@ type Config struct {
 	// CompositeLabelKey is the label key on MRs linking them to a composite (XR).
 	CompositeLabelKey string
 
+	// MRXRParentLabels controls whether crossplane_mr_* series include typed
+	// XR parent labels (xr_kind, xr_namespace, xr_group). Default true.
+	MRXRParentLabels bool
+
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
 
@@ -145,6 +149,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		CompositionLabelKey:      defaultCompositionLabelKey,
 		CompositeLabelKey:        defaultCompositeLabelKey,
+		MRXRParentLabels:         true,
 		PollIntervalSeconds:      defaultPollInterval,
 		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
 		MetricsAddr:              defaultMetricsAddr,
@@ -195,6 +200,16 @@ func Load() (*Config, error) {
 	// Optional: COMPOSITE_LABEL_KEY
 	if v := os.Getenv("COMPOSITE_LABEL_KEY"); v != "" {
 		cfg.CompositeLabelKey = v
+	}
+
+	// Optional: MR_XR_PARENT_LABELS (default true). Set false/0/no to omit
+	// xr_kind / xr_namespace / xr_group on crossplane_mr_* series.
+	if v := os.Getenv("MR_XR_PARENT_LABELS"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MR_XR_PARENT_LABELS: %w", err)
+		}
+		cfg.MRXRParentLabels = enabled
 	}
 
 	// Optional: MR_GVRS (merged with MRD discovery at startup and on refresh)
@@ -399,6 +414,19 @@ func ParseGVR(s string) (schema.GroupVersionResource, error) {
 		Version:  segments[1],
 		Resource: segments[2],
 	}, nil
+}
+
+// parseBoolEnv parses a boolean environment value.
+// Accepted true: true, 1, yes. Accepted false: false, 0, no. Case-insensitive.
+func parseBoolEnv(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes":
+		return true, nil
+	case "false", "0", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("want true/false/1/0/yes/no, got %q", v)
+	}
 }
 
 // splitAndTrim splits s by comma and trims whitespace from each part,

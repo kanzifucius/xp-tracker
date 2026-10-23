@@ -11,7 +11,7 @@ import (
 
 func TestMRCollector_Empty(t *testing.T) {
 	s := store.New()
-	c := NewMRCollector(s)
+	c := NewMRCollector(s, true)
 
 	families := gatherCollector(t, c)
 	totalFam := families["crossplane_mr_total"]
@@ -27,6 +27,7 @@ func TestMRCollector_WithData(t *testing.T) {
 		{
 			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
 			Namespace: "default", Name: "nop-1", XRName: "xr-1",
+			XRKind: "XWidget", XRNamespace: "team-alpha", XRGroup: "samples.xptracker.dev",
 			ClaimName: "widget-a", ClaimNS: "team-alpha",
 			Provider: "provider-nop", ProviderConfig: "default", ExternalName: "cloud-nop-1",
 			ManagementPolicies: "*", Reason: "Available", CreatedAt: createdAt,
@@ -35,6 +36,7 @@ func TestMRCollector_WithData(t *testing.T) {
 		{
 			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
 			Namespace: "default", Name: "nop-2", XRName: "xr-2",
+			XRKind: "App", XRNamespace: "default", XRGroup: "samples.xptracker.dev",
 			ClaimName: "widget-b", ClaimNS: "team-alpha",
 			Provider: "provider-nop", ProviderConfig: "default",
 			ManagementPolicies: "Observe", Reason: "Creating", CreatedAt: createdAt,
@@ -42,7 +44,7 @@ func TestMRCollector_WithData(t *testing.T) {
 		},
 	})
 
-	c := NewMRCollector(s)
+	c := NewMRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_mr_total"]
@@ -70,6 +72,9 @@ func TestMRCollector_WithData(t *testing.T) {
 	assertLabel(t, labels, "kind", "NopResource")
 	assertLabel(t, labels, "version", "v1alpha1")
 	assertLabel(t, labels, "xr_name", "xr-1")
+	assertLabel(t, labels, "xr_kind", "XWidget")
+	assertLabel(t, labels, "xr_namespace", "team-alpha")
+	assertLabel(t, labels, "xr_group", "samples.xptracker.dev")
 	assertLabel(t, labels, "claim_name", "widget-a")
 	assertLabel(t, labels, "claim_namespace", "team-alpha")
 	assertLabel(t, labels, "provider", "provider-nop")
@@ -91,9 +96,35 @@ func TestMRCollector_WithData(t *testing.T) {
 	}
 }
 
+func TestMRCollector_XRParentLabelsDisabled(t *testing.T) {
+	s := store.New()
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []store.MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
+			Namespace: "default", Name: "nop-1", XRName: "xr-1",
+			XRKind: "XWidget", XRNamespace: "ns", XRGroup: "g1",
+			Synced: true, Ready: true,
+		},
+	})
+
+	c := NewMRCollector(s, false)
+	families := gatherCollector(t, c)
+	totalFam := families["crossplane_mr_total"]
+	if totalFam == nil {
+		t.Fatal("missing crossplane_mr_total")
+	}
+	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "name", "nop-1")
+	assertLabel(t, labels, "xr_name", "xr-1")
+	for _, name := range []string{"xr_kind", "xr_namespace", "xr_group"} {
+		if _, ok := labels[name]; ok {
+			t.Errorf("expected %s omitted when XR parent labels disabled", name)
+		}
+	}
+}
+
 func TestMRCollector_Describe(t *testing.T) {
 	s := store.New()
-	c := NewMRCollector(s)
+	c := NewMRCollector(s, true)
 
 	ch := make(chan *prometheus.Desc, 10)
 	c.Describe(ch)
@@ -117,13 +148,14 @@ func TestMRCollector_Deleting(t *testing.T) {
 		{
 			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
 			Namespace: "default", Name: "nop-dying", XRName: "xr-1",
+			XRKind: "XWidget", XRGroup: "g1",
 			Provider: "provider-nop", ManagementPolicies: "Observe",
 			Paused: true, Synced: false, Ready: false, Reason: "Deleting",
 			CreatedAt: createdAt, DeletedAt: deletedAt,
 		},
 	})
 
-	c := NewMRCollector(s)
+	c := NewMRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_mr_total"]
@@ -131,6 +163,7 @@ func TestMRCollector_Deleting(t *testing.T) {
 	assertLabel(t, labels, "deleting", "true")
 	assertLabel(t, labels, "paused", "true")
 	assertLabel(t, labels, "management_policies", "Observe")
+	assertLabel(t, labels, "xr_kind", "XWidget")
 
 	deletionFam := families["crossplane_mr_deletion_timestamp_seconds"]
 	if deletionFam == nil || len(deletionFam.GetMetric()) != 1 {
