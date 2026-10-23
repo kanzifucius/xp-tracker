@@ -98,8 +98,11 @@ Total number of XR-linked provider managed resources (MRs), broken down by label
 | `namespace` | Kubernetes namespace |
 | `name` | MR metadata name |
 | `xr_name` | Composite (XR) name from the composite label |
-| `claim_name` | Claim name linked to the MR (from MR labels or legacy XR enrichment); empty for native v2 resources |
-| `claim_namespace` | Claim namespace linked to the MR; empty for native v2 resources |
+| `xr_kind` | Kind of the backing XR (from store enrichment); empty if the XR is not yet in the store. Omitted when `MR_XR_PARENT_LABELS=false` |
+| `xr_namespace` | Namespace of the backing XR (empty for cluster-scoped XRs). Omitted when `MR_XR_PARENT_LABELS=false` |
+| `xr_group` | API group of the backing XR. Omitted when `MR_XR_PARENT_LABELS=false` |
+| `claim_name` | Claim name linked to the MR (legacy claim path only); empty for native v2 resources |
+| `claim_namespace` | Claim namespace linked to the MR (legacy claim path only); empty for native v2 resources |
 | `provider` | Provider package name from MRD discovery (e.g. `provider-nop`) |
 | `provider_config` | `spec.providerConfigRef.name` |
 | `external_name` | Cloud resource identifier from the `crossplane.io/external-name` annotation (empty until the provider sets it) |
@@ -184,8 +187,9 @@ Claim/XR/MR cardinality tracks inventory size plus status labels. Package series
 ## Label notes
 
 - **Empty labels**: if an annotation key is not configured or the annotation is not present on a resource, the label value is an empty string (`""`).
-- **XR claim linkage**: `claim_name` and `claim_namespace` on legacy XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name. Native v2 XRs leave both labels empty.
-- **MR claim linkage**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker looks up the XR named by `xr_name` in the MR's namespace, then falls back to a cluster-scoped XR.
+- **XR claim linkage**: `claim_name` and `claim_namespace` on legacy XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name. Native v2 XRs leave both labels empty — that is expected; claims are uncommon on Crossplane v2.
+- **MR → XR ownership (primary)**: `xr_name` comes from the composite label. With `MR_XR_PARENT_LABELS` enabled (the default), xp-tracker also sets `xr_kind`, `xr_namespace`, and `xr_group` from the backing XR in the store (same namespace preference as claim enrichment). Prefer these labels for joins on modern fleets; do not require `claim_*`.
+- **MR claim linkage (legacy)**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker copies them from the backing XR when that XR has claim fields. Empty on native v2 trees.
 - **MR scope**: only provider MRs with the composite label are tracked.
 - **Composition**: composition is resolved internally for enrichment but is not exposed as a Prometheus label dimension.
 - **Namespace for XRs**: native Crossplane v2 composite resources are namespaced by default; legacy XRs are cluster-scoped and have an empty `namespace` label.

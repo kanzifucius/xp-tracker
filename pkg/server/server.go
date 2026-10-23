@@ -26,13 +26,26 @@ type Server struct {
 	listening  chan struct{} // closed once the listener is bound
 }
 
+// Options configures optional server behaviour.
+type Options struct {
+	// MRXRParentLabels includes xr_kind / xr_namespace / xr_group on MR series.
+	// When omitted (zero value), defaults to true.
+	MRXRParentLabels *bool
+}
+
 // New creates a new metrics Server.
 // It registers claim, XR, MR, and package collectors with a dedicated Prometheus registry.
-func New(addr string, s store.Store) *Server {
+// MR typed XR parent labels default to enabled; pass Options to override.
+func New(addr string, s store.Store, opts ...Options) *Server {
+	includeXRParent := true
+	if len(opts) > 0 && opts[0].MRXRParentLabels != nil {
+		includeXRParent = *opts[0].MRXRParentLabels
+	}
+
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(metrics.NewClaimCollector(s))
 	registry.MustRegister(metrics.NewXRCollector(s))
-	registry.MustRegister(metrics.NewMRCollector(s))
+	registry.MustRegister(metrics.NewMRCollector(s, includeXRParent))
 	registry.MustRegister(metrics.NewPackageCollector(s))
 	metrics.RegisterSelfMetrics(registry)
 
