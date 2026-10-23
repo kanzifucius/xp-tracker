@@ -49,7 +49,7 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Build from Source"
 
-    Requires Go 1.26.9+:
+    Requires Go 1.26.10+:
 
     ```bash
     git clone https://github.com/kanzifucius/xp-tracker.git
