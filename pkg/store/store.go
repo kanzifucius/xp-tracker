@@ -174,13 +174,14 @@ func (s *MemoryStore) ReplaceClaims(gvr string, items []ClaimInfo) {
 }
 
 // ReplaceXRs atomically replaces the stored XRs for a given GVR.
+// Keys include the GVR so two XR kinds that share a namespace/name do not collide.
 func (s *MemoryStore) ReplaceXRs(gvr string, items []XRInfo) {
 	newKeys := make(map[string]struct{}, len(items))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for _, x := range items {
-		key := objectKey(x.Namespace, x.Name)
+		key := xrKey(gvr, x.Namespace, x.Name)
 		newKeys[key] = struct{}{}
 		s.xrs[key] = x
 	}
@@ -287,6 +288,8 @@ func (s *MemoryStore) EnrichClaimCompositions() {
 // and copies typed XR identity (kind, namespace, group). It also copies legacy
 // claim linkage when claim fields are not already set from MR labels. It
 // prefers an XR in the MR's namespace, then falls back to a cluster-scoped XR.
+// When more than one XR matches (same name in the preferred scope, different
+// kinds/groups), typed parent labels are left empty rather than guessing.
 func (s *MemoryStore) EnrichMRClaims() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -297,6 +300,13 @@ func (s *MemoryStore) EnrichMRClaims() {
 		}
 		xr, ok := s.lookupXR(mr.Namespace, mr.XRName)
 		if !ok {
+			// Clear stale typed identity when the XR is missing or ambiguous.
+			if mr.XRKind != "" || mr.XRNamespace != "" || mr.XRGroup != "" {
+				mr.XRKind = ""
+				mr.XRNamespace = ""
+				mr.XRGroup = ""
+				s.mrs[key] = mr
+			}
 			continue
 		}
 		mr.XRKind = xr.Kind
@@ -310,12 +320,36 @@ func (s *MemoryStore) EnrichMRClaims() {
 	}
 }
 
+// lookupXR returns the single XR matching name in the preferred scope, or
+// false when none or more than one match (ambiguous across kinds/groups).
+// Preference: namespaced XRs in namespace when namespace is non-empty; otherwise
+// (or when none are namespaced there) cluster-scoped XRs with that name.
 func (s *MemoryStore) lookupXR(namespace, name string) (XRInfo, bool) {
-	if xr, ok := s.xrs[objectKey(namespace, name)]; ok {
-		return xr, true
+	matches := s.matchXRs(namespace, name)
+	if len(matches) != 1 {
+		return XRInfo{}, false
 	}
-	xr, ok := s.xrs[name]
-	return xr, ok
+	return matches[0], true
+}
+
+// matchXRs returns XR candidates for a consumer in namespace looking up name.
+func (s *MemoryStore) matchXRs(namespace, name string) []XRInfo {
+	var namespaced, cluster []XRInfo
+	for _, xr := range s.xrs {
+		if xr.Name != name {
+			continue
+		}
+		switch {
+		case xr.Namespace == "":
+			cluster = append(cluster, xr)
+		case namespace != "" && xr.Namespace == namespace:
+			namespaced = append(namespaced, xr)
+		}
+	}
+	if namespace != "" && len(namespaced) > 0 {
+		return namespaced
+	}
+	return cluster
 }
 
 // SnapshotClaims returns a copy of all stored claims.
@@ -398,6 +432,12 @@ func objectKey(namespace, name string) string {
 		return name
 	}
 	return namespace + "/" + name
+}
+
+// xrKey produces a map key that includes GVR so distinct XR kinds sharing a
+// namespace/name remain distinct entries.
+func xrKey(gvr, namespace, name string) string {
+	return gvr + "|" + objectKey(namespace, name)
 }
 
 func packageKey(kind, name string) string {
