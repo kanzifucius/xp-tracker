@@ -128,17 +128,17 @@ Modern ownership is **XR → MR**. Prefer `xr_name` / `xr_kind` / `xr_namespace`
 sum by (kind)(crossplane_mr_total)
 ```
 
-### MRs by parent XR kind
+### MRs by parent XR
 
 ```promql
-sum by (xr_kind, xr_name)(crossplane_mr_total)
+sum by (xr_group, xr_kind, xr_namespace, xr_name)(crossplane_mr_total)
 ```
 
 ### MRs for one XR (typed parent)
 
 ```promql
 max by (name, namespace, synced, ready)(
-  crossplane_mr_total{xr_kind="App", xr_name="my-app", xr_namespace="default"}
+  crossplane_mr_total{xr_group="example.org", xr_kind="App", xr_namespace="default", xr_name="my-app"}
 )
 ```
 
