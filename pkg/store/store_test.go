@@ -223,6 +223,63 @@ func TestEnrichMRClaims_PrefersNamespacedXR(t *testing.T) {
 	}
 }
 
+func TestEnrichMRClaims_AmbiguousXRLeavesTypedLabelsEmpty(t *testing.T) {
+	s := New()
+	// Two XR kinds share the same namespace/name — composite label alone is ambiguous.
+	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Namespace: "team-a", Name: "shared", ClaimName: "c1", ClaimNS: "team-a"},
+	})
+	s.ReplaceXRs("g1/v1/xgadgets", []XRInfo{
+		{GVR: "g1/v1/xgadgets", Group: "g1", Kind: "XGadget", Namespace: "team-a", Name: "shared", ClaimName: "c2", ClaimNS: "team-a"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "team-a", Name: "resource", XRName: "shared"},
+	})
+
+	s.EnrichMRClaims()
+
+	mrs := s.SnapshotMRs()
+	if len(mrs) != 1 {
+		t.Fatalf("expected one MR, got %d", len(mrs))
+	}
+	if mrs[0].XRKind != "" || mrs[0].XRNamespace != "" || mrs[0].XRGroup != "" {
+		t.Fatalf("expected empty typed XR labels when ambiguous, got kind=%q ns=%q group=%q",
+			mrs[0].XRKind, mrs[0].XRNamespace, mrs[0].XRGroup)
+	}
+	if mrs[0].ClaimName != "" || mrs[0].ClaimNS != "" {
+		t.Fatalf("expected no claim enrichment when XR match is ambiguous, got %q/%q",
+			mrs[0].ClaimName, mrs[0].ClaimNS)
+	}
+}
+
+func TestEnrichMRClaims_ClearsStaleTypedLabelsWhenAmbiguous(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Namespace: "team-a", Name: "shared"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "team-a", Name: "resource", XRName: "shared",
+			XRKind: "XWidget", XRNamespace: "team-a", XRGroup: "g1"},
+	})
+	s.EnrichMRClaims()
+	if got := s.SnapshotMRs()[0]; got.XRKind != "XWidget" {
+		t.Fatalf("precondition: expected XWidget, got %q", got.XRKind)
+	}
+
+	// Second XR kind with the same name makes the match ambiguous.
+	s.ReplaceXRs("g1/v1/xgadgets", []XRInfo{
+		{GVR: "g1/v1/xgadgets", Group: "g1", Kind: "XGadget", Namespace: "team-a", Name: "shared"},
+	})
+	s.EnrichMRClaims()
+
+	got := s.SnapshotMRs()[0]
+	if got.XRKind != "" || got.XRGroup != "" || got.XRNamespace != "" {
+		t.Fatalf("expected typed labels cleared when ambiguous, got kind=%q ns=%q group=%q",
+			got.XRKind, got.XRNamespace, got.XRGroup)
+	}
+}
+
 func TestReplaceMRs(t *testing.T) {
 	s := New()
 	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
