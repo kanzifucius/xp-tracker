@@ -7,7 +7,7 @@ hide:
 
 <p align="center">
   <a href="https://github.com/kanzifucius/xp-tracker/releases/latest"><img src="https://img.shields.io/github/v/release/kanzifucius/xp-tracker?style=flat" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Go-1.26.9+-00ADD8?style=flat&logo=go" alt="Go Version">
+  <img src="https://img.shields.io/badge/Go-1.26.10+-00ADD8?style=flat&logo=go" alt="Go Version">
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/Crossplane-2.0+-7C3AED?style=flat" alt="Crossplane">
 </p>
