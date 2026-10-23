@@ -56,8 +56,11 @@ type MRInfo struct {
 	Namespace          string    `json:"namespace"`
 	Name               string    `json:"name"`
 	XRName             string    `json:"xrName"`             // crossplane.io/composite label
-	ClaimName          string    `json:"claimName"`          // enriched from XR or MR labels
-	ClaimNS            string    `json:"claimNamespace"`     // enriched from XR or MR labels
+	XRKind             string    `json:"xrKind"`             // enriched from backing XR kind
+	XRNamespace        string    `json:"xrNamespace"`        // enriched from backing XR namespace
+	XRGroup            string    `json:"xrGroup"`            // enriched from backing XR API group
+	ClaimName          string    `json:"claimName"`          // enriched from XR or MR labels (legacy claim path)
+	ClaimNS            string    `json:"claimNamespace"`     // enriched from XR or MR labels (legacy claim path)
 	Provider           string    `json:"provider"`           // pkg.crossplane.io/package from MRD discovery
 	ProviderConfig     string    `json:"providerConfig"`     // spec.providerConfigRef.name
 	ExternalName       string    `json:"externalName"`       // crossplane.io/external-name annotation
@@ -280,25 +283,30 @@ func (s *MemoryStore) EnrichClaimCompositions() {
 	}
 }
 
-// EnrichMRClaims copies legacy claim linkage onto MRs from the backing XR when
-// claim fields are not already set from MR labels. It prefers an XR in the
-// MR's namespace, then falls back to a cluster-scoped XR.
+// EnrichMRClaims resolves each MR's backing XR (via xr_name / composite label)
+// and copies typed XR identity (kind, namespace, group). It also copies legacy
+// claim linkage when claim fields are not already set from MR labels. It
+// prefers an XR in the MR's namespace, then falls back to a cluster-scoped XR.
 func (s *MemoryStore) EnrichMRClaims() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for key, mr := range s.mrs {
-		if mr.ClaimName != "" {
-			continue
-		}
 		if mr.XRName == "" {
 			continue
 		}
-		if xr, ok := s.lookupXR(mr.Namespace, mr.XRName); ok {
+		xr, ok := s.lookupXR(mr.Namespace, mr.XRName)
+		if !ok {
+			continue
+		}
+		mr.XRKind = xr.Kind
+		mr.XRNamespace = xr.Namespace
+		mr.XRGroup = xr.Group
+		if mr.ClaimName == "" {
 			mr.ClaimName = xr.ClaimName
 			mr.ClaimNS = xr.ClaimNS
-			s.mrs[key] = mr
 		}
+		s.mrs[key] = mr
 	}
 }
 

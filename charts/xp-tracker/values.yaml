@@ -43,6 +43,7 @@ config:
   # CREATOR_ANNOTATION_KEY: ""
   # TEAM_ANNOTATION_KEY: ""
   # COMPOSITION_LABEL_KEY: "crossplane.io/composition-name"
+  # MR_XR_PARENT_LABELS: "true"
   # CLAIM_GVRS: ""
   # XR_GVRS: ""
   # STORE_BACKEND: "memory"

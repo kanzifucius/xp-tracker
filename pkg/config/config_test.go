@@ -127,6 +127,9 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Errorf("expected env GVR overrides to be captured, got claims=%d xrs=%d",
 			len(cfg.EnvClaimGVRs), len(cfg.EnvXRGVRs))
 	}
+	if !cfg.MRXRParentLabels {
+		t.Error("expected MRXRParentLabels default true")
+	}
 }
 
 func TestLoad_AllOptions(t *testing.T) {
@@ -137,6 +140,7 @@ func TestLoad_AllOptions(t *testing.T) {
 		"CREATOR_ANNOTATION_KEY":     "platform.example.org/creator",
 		"TEAM_ANNOTATION_KEY":        "platform.example.org/team",
 		"COMPOSITION_LABEL_KEY":      "custom.io/comp",
+		"MR_XR_PARENT_LABELS":        "false",
 		"POLL_INTERVAL_SECONDS":      "15",
 		"DISCOVERY_INTERVAL_SECONDS": "60",
 		"METRICS_ADDR":               ":9090",
@@ -160,6 +164,9 @@ func TestLoad_AllOptions(t *testing.T) {
 	if cfg.CompositionLabelKey != "custom.io/comp" {
 		t.Errorf("unexpected composition label key: %s", cfg.CompositionLabelKey)
 	}
+	if cfg.MRXRParentLabels {
+		t.Error("expected MRXRParentLabels false when MR_XR_PARENT_LABELS=false")
+	}
 	if cfg.PollIntervalSeconds != 15 {
 		t.Errorf("unexpected poll interval: %d", cfg.PollIntervalSeconds)
 	}
@@ -172,6 +179,25 @@ func TestLoad_AllOptions(t *testing.T) {
 	if cfg.LogLevel != slog.LevelDebug {
 		t.Errorf("unexpected log level: %s", cfg.LogLevel)
 	}
+}
+
+func TestLoad_MRXRParentLabels(t *testing.T) {
+	t.Run("true", func(t *testing.T) {
+		setEnvs(t, map[string]string{"MR_XR_PARENT_LABELS": "yes"})
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !cfg.MRXRParentLabels {
+			t.Error("expected true")
+		}
+	})
+	t.Run("invalid", func(t *testing.T) {
+		setEnvs(t, map[string]string{"MR_XR_PARENT_LABELS": "maybe"})
+		if _, err := Load(); err == nil {
+			t.Fatal("expected error for invalid MR_XR_PARENT_LABELS")
+		}
+	})
 }
 
 func TestParseLogLevel(t *testing.T) {

@@ -181,6 +181,7 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `TEAM_ANNOTATION_KEY` | no | `""` | Annotation key for claim team |
 | `COMPOSITION_LABEL_KEY` | no | `crossplane.io/composition-name` | Label key on XRs for composition |
 | `COMPOSITE_LABEL_KEY` | no | `crossplane.io/composite` | Label key on MRs linking them to a composite |
+| `MR_XR_PARENT_LABELS` | no | `true` | Include `xr_kind` / `xr_namespace` / `xr_group` on `crossplane_mr_*` (set `false` to omit) |
 | `MR_GVRS` | no | `""` | Additional MR GVRs merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | no | `300` | Seconds between XRD/MRD re-discovery cycles; `0` disables periodic re-discovery |
@@ -205,7 +206,7 @@ XRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracke
 
 ### Provider MR discovery
 
-xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`) at startup and on each re-discovery cycle. Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Active MRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_mrd_discovery_skipped_total`) instead of failing discovery. Only MRs with the composite label are polled; claim linkage is enriched from MR labels or the backing XR.
+xp-tracker lists `ManagedResourceDefinition` objects (`apiextensions.crossplane.io/v1alpha1`) and derives MR GVRs from Active MRDs (`spec.state: Active`) at startup and on each re-discovery cycle. Provider attribution uses the `pkg.crossplane.io/package` label or a `Provider` owner reference. Additional GVRs from `MR_GVRS` are merged in. Active MRDs whose spec cannot yield a GVR are skipped (logged and counted in `xp_tracker_mrd_discovery_skipped_total`) instead of failing discovery. Only MRs with the composite label are polled; typed XR parent fields and legacy claim linkage are enriched from the backing XR.
 
 ### Additional claim/XR GVRs (deprecated)
 
@@ -234,7 +235,7 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 | `crossplane_xr_status_ready` | Gauge | same as `crossplane_xr_total` | Per-XR Ready status (1=true, 0=false) |
 | `crossplane_xr_created_timestamp_seconds` | Gauge | same as `crossplane_xr_total` | Unix creation timestamp |
 | `crossplane_xr_deletion_timestamp_seconds` | Gauge | same as `crossplane_xr_total` | Unix deletion timestamp (while deleting) |
-| `crossplane_mr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `xr_name`, `claim_name`, `claim_namespace`, `provider`, `provider_config`, `external_name`, `management_policies`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of claim-linked MRs |
+| `crossplane_mr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `xr_name`, `xr_kind`, `xr_namespace`, `xr_group`, `claim_name`, `claim_namespace`, `provider`, `provider_config`, `external_name`, `management_policies`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of XR-linked MRs (`xr_kind`/`xr_namespace`/`xr_group` omitted when `MR_XR_PARENT_LABELS=false`) |
 | `crossplane_mr_ready` | Gauge | same as `crossplane_mr_total` | Number of MRs with Ready=True |
 | `crossplane_mr_status_synced` | Gauge | same as `crossplane_mr_total` | Per-MR Synced status (1=true, 0=false) |
 | `crossplane_mr_status_ready` | Gauge | same as `crossplane_mr_total` | Per-MR Ready status (1=true, 0=false) |
@@ -252,7 +253,8 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 - **claim_name** -- Claim metadata name (claims); XR/MR claim linkage from labels or enrichment
 - **claim_namespace** -- Claim namespace linked to an XR or MR
 - **name** -- XR or MR metadata name
-- **xr_name** -- Composite name from the composite label (MRs only)
+- **xr_name** -- Composite name from the composite label (MRs only); primary XR → MR ownership edge
+- **xr_kind** / **xr_namespace** / **xr_group** -- Typed backing XR identity on MR series (default on; empty until the XR is in the store)
 - **provider** / **provider_config** / **external_name** / **management_policies** -- MR provider attribution and cloud identity
 - **synced** / **ready** -- Crossplane condition statuses as labels (`true`/`false`)
 - **reason** -- Ready condition reason (e.g. `Available`, `Creating`)
