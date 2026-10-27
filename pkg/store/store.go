@@ -35,6 +35,7 @@ type XRInfo struct {
 	Kind              string    `json:"kind"`
 	Namespace         string    `json:"namespace"` // usually empty for cluster-scoped XRs
 	Name              string    `json:"name"`
+	UID               string    `json:"uid,omitempty"` // metadata.uid — used to validate ownerReferences
 	ClaimName         string    `json:"claimName"`
 	ClaimNS           string    `json:"claimNamespace"`
 	Composition       string    `json:"composition"`
@@ -42,6 +43,7 @@ type XRInfo struct {
 	ParentName        string    `json:"parentName,omitempty"`      // immediate XR owner name; empty for roots
 	ParentNamespace   string    `json:"parentNamespace,omitempty"` // resolved namespaced parent; empty for cluster-scoped / roots
 	ParentGroup       string    `json:"parentGroup,omitempty"`     // API group of parent (internal join / validation)
+	ParentUID         string    `json:"parentUID,omitempty"`       // ownerReference UID — required for parent match
 	ClaimsUnsupported bool      `json:"-"`                         // true for modern XRs that cannot be backed by claims
 	Paused            bool      `json:"paused"`                    // crossplane.io/paused annotation
 	Synced            bool      `json:"synced"`
@@ -291,9 +293,10 @@ func (s *MemoryStore) EnrichClaimCompositions() {
 
 // EnrichXRParents validates convert-time parent_* candidates against the XR
 // inventory. A parent must uniquely match an inventoried XR by kind+name
-// (and group when set). ParentNamespace is filled from the matched XR
-// (empty for cluster-scoped parents). Missing or ambiguous parents are cleared
-// so root / unknown linkage stays empty rather than guessed.
+// (and group when set) and by ownerReference UID. ParentNamespace is filled
+// from the matched XR (empty for cluster-scoped parents). Missing, UID-mismatched,
+// or ambiguous parents are cleared so root / unknown linkage stays empty rather
+// than guessing a same-name replacement.
 func (s *MemoryStore) EnrichXRParents() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -308,6 +311,7 @@ func (s *MemoryStore) EnrichXRParents() {
 			xr.ParentName = ""
 			xr.ParentNamespace = ""
 			xr.ParentGroup = ""
+			xr.ParentUID = ""
 			s.xrs[key] = xr
 			continue
 		}
@@ -315,14 +319,20 @@ func (s *MemoryStore) EnrichXRParents() {
 		xr.ParentName = parent.Name
 		xr.ParentNamespace = parent.Namespace
 		xr.ParentGroup = parent.Group
+		xr.ParentUID = parent.UID
 		s.xrs[key] = xr
 	}
 }
 
 // lookupParentXR finds the unique inventoried XR matching a child's parent_*
 // candidate. Preference: same-namespace namespaced XR when the child is
-// namespaced, then cluster-scoped XR with that name/kind.
+// namespaced, then cluster-scoped XR with that name/kind. Requires a non-empty
+// exact ParentUID ↔ UID match so orphaned children do not attach to a same-name
+// replacement of the deleted owner.
 func (s *MemoryStore) lookupParentXR(child XRInfo) (XRInfo, bool) {
+	if child.ParentUID == "" {
+		return XRInfo{}, false
+	}
 	var namespaced, cluster []XRInfo
 	for _, cand := range s.xrs {
 		if cand.Name != child.ParentName {
@@ -334,7 +344,13 @@ func (s *MemoryStore) lookupParentXR(child XRInfo) (XRInfo, bool) {
 		if child.ParentGroup != "" && cand.Group != child.ParentGroup {
 			continue
 		}
+		if cand.UID == "" || cand.UID != child.ParentUID {
+			continue
+		}
 		// Never treat the child as its own parent.
+		if cand.UID == child.UID && child.UID != "" {
+			continue
+		}
 		if cand.Name == child.Name && cand.Namespace == child.Namespace && cand.Kind == child.Kind && cand.Group == child.Group {
 			continue
 		}

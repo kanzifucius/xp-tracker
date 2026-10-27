@@ -333,8 +333,8 @@ func TestUnstructuredToXR_ParentFromOwnerReferences(t *testing.T) {
 	}})
 
 	xr := UnstructuredToXR(*obj, gvr, cfg)
-	if xr.ParentKind != "XApp" || xr.ParentName != "app-1" || xr.ParentGroup != "platform.example.org" {
-		t.Fatalf("parent: got kind=%q name=%q group=%q", xr.ParentKind, xr.ParentName, xr.ParentGroup)
+	if xr.ParentKind != "XApp" || xr.ParentName != "app-1" || xr.ParentGroup != "platform.example.org" || xr.ParentUID != "uid-app-1" {
+		t.Fatalf("parent: got kind=%q name=%q group=%q uid=%q", xr.ParentKind, xr.ParentName, xr.ParentGroup, xr.ParentUID)
 	}
 	if xr.ParentNamespace != "" {
 		t.Fatalf("ParentNamespace should stay empty until store enrichment, got %q", xr.ParentNamespace)

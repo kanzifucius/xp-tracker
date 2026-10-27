@@ -73,6 +73,7 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		Kind:              obj.GetKind(),
 		Namespace:         obj.GetNamespace(),
 		Name:              obj.GetName(),
+		UID:               string(obj.GetUID()),
 		CreatedAt:         obj.GetCreationTimestamp().Time,
 		ClaimsUnsupported: !xrSupportsClaims(cfg, gvr),
 	}
@@ -100,6 +101,7 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		xr.ParentKind = parent.Kind
 		xr.ParentName = parent.Name
 		xr.ParentGroup = parent.Group
+		xr.ParentUID = parent.UID
 	}
 
 	// Extract standard Crossplane status conditions.
@@ -114,11 +116,13 @@ type xrOwnerRef struct {
 	Group string
 	Kind  string
 	Name  string
+	UID   string
 }
 
 // immediateXROwner selects the immediate XR-typed owner from ownerReferences.
 // Preference: controller:true XR-like ref; else exactly one XR-like ref.
 // Claims and core Kubernetes kinds are ignored. Ambiguous → ok=false.
+// Owner UID is preserved so store enrichment can reject same-name replacements.
 func immediateXROwner(refs []metav1.OwnerReference) (xrOwnerRef, bool) {
 	var candidates []xrOwnerRef
 	var controller *xrOwnerRef
@@ -130,6 +134,7 @@ func immediateXROwner(refs []metav1.OwnerReference) (xrOwnerRef, bool) {
 			Group: apiGroupFromAPIVersion(ref.APIVersion),
 			Kind:  ref.Kind,
 			Name:  ref.Name,
+			UID:   string(ref.UID),
 		}
 		candidates = append(candidates, cand)
 		if ref.Controller != nil && *ref.Controller {
