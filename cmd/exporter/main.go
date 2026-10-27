@@ -125,12 +125,18 @@ func run() error {
 	mrOwnerXR := cfg.MROwnerXRLabels
 	xrChildInfo := cfg.XRChildInfoMetric
 	mrOwnerInfo := cfg.MROwnerInfoMetric
+	condTransitions := cfg.ConditionTransitionTimestamps
+	condMessages := cfg.ConditionMessageInfo
+	resourceIdentity := cfg.ResourceIdentityLabels
 	srv := server.New(cfg.MetricsAddr, s, server.Options{
-		MRXRParentLabels:  &mrXRParent,
-		XRParentLabels:    &xrParent,
-		MROwnerXRLabels:   &mrOwnerXR,
-		XRChildInfoMetric: &xrChildInfo,
-		MROwnerInfoMetric: &mrOwnerInfo,
+		MRXRParentLabels:              &mrXRParent,
+		XRParentLabels:                &xrParent,
+		MROwnerXRLabels:               &mrOwnerXR,
+		XRChildInfoMetric:             &xrChildInfo,
+		MROwnerInfoMetric:             &mrOwnerInfo,
+		ConditionTransitionTimestamps: &condTransitions,
+		ConditionMessageInfo:          &condMessages,
+		ResourceIdentityLabels:        &resourceIdentity,
 	})
 	go func() {
 		if err := srv.Run(ctx); err != nil {

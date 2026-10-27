@@ -102,6 +102,18 @@ type Config struct {
 	// is large (~1200+).
 	MROwnerInfoMetric bool
 
+	// ConditionTransitionTimestamps emits Ready lastTransitionTime gauges.
+	// Default false.
+	ConditionTransitionTimestamps bool
+
+	// ConditionMessageInfo emits Ready condition info metrics (includes
+	// truncated message). Default false; watch cardinality/PII.
+	ConditionMessageInfo bool
+
+	// ResourceIdentityLabels adds uid and composition_revision labels on
+	// helper metrics when those helpers are enabled. Default false.
+	ResourceIdentityLabels bool
+
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
 
@@ -166,20 +178,23 @@ const (
 // Load reads configuration from environment variables and returns a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		CompositionLabelKey:      defaultCompositionLabelKey,
-		CompositeLabelKey:        defaultCompositeLabelKey,
-		MRXRParentLabels:         true,
-		XRParentLabels:           true,
-		MROwnerXRLabels:          true,
-		XRChildInfoMetric:        false,
-		MROwnerInfoMetric:        false,
-		PollIntervalSeconds:      defaultPollInterval,
-		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
-		MetricsAddr:              defaultMetricsAddr,
-		LogLevel:                 slog.LevelInfo,
-		MRProviderNames:          make(map[string]string),
-		XRGVRSScopes:             make(map[string]ResourceScope),
-		MRGVRSScopes:             make(map[string]ResourceScope),
+		CompositionLabelKey:           defaultCompositionLabelKey,
+		CompositeLabelKey:             defaultCompositeLabelKey,
+		MRXRParentLabels:              true,
+		XRParentLabels:                true,
+		MROwnerXRLabels:               true,
+		XRChildInfoMetric:             false,
+		MROwnerInfoMetric:             false,
+		ConditionTransitionTimestamps: false,
+		ConditionMessageInfo:          false,
+		ResourceIdentityLabels:        false,
+		PollIntervalSeconds:           defaultPollInterval,
+		DiscoveryIntervalSeconds:      defaultDiscoveryInterval,
+		MetricsAddr:                   defaultMetricsAddr,
+		LogLevel:                      slog.LevelInfo,
+		MRProviderNames:               make(map[string]string),
+		XRGVRSScopes:                  make(map[string]ResourceScope),
+		MRGVRSScopes:                  make(map[string]ResourceScope),
 	}
 
 	// Optional: CLAIM_GVRS (deprecated in favour of XRD discovery)
@@ -273,6 +288,34 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid MR_OWNER_INFO_METRIC: %w", err)
 		}
 		cfg.MROwnerInfoMetric = enabled
+	}
+
+	// Optional: CONDITION_TRANSITION_TIMESTAMPS (default false).
+	if v := os.Getenv("CONDITION_TRANSITION_TIMESTAMPS"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CONDITION_TRANSITION_TIMESTAMPS: %w", err)
+		}
+		cfg.ConditionTransitionTimestamps = enabled
+	}
+
+	// Optional: CONDITION_MESSAGE_INFO (default false).
+	if v := os.Getenv("CONDITION_MESSAGE_INFO"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CONDITION_MESSAGE_INFO: %w", err)
+		}
+		cfg.ConditionMessageInfo = enabled
+	}
+
+	// Optional: RESOURCE_IDENTITY_LABELS (default false) — uid / composition_revision
+	// on helper metrics when those helpers are enabled.
+	if v := os.Getenv("RESOURCE_IDENTITY_LABELS"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid RESOURCE_IDENTITY_LABELS: %w", err)
+		}
+		cfg.ResourceIdentityLabels = enabled
 	}
 
 	// Optional: MR_GVRS (merged with MRD discovery at startup and on refresh)

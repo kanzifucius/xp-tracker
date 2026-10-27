@@ -162,6 +162,18 @@ Gauge `1` per MR with a resolved immediate owner XR. Enabled with `MR_OWNER_INFO
 | `owner_group` / `owner_kind` / `owner_namespace` / `owner_name` | Immediate owner XR |
 | `mr_group` / `mr_kind` / `mr_namespace` / `mr_name` | Managed resource |
 
+## Dashboard helper metrics (opt-in)
+
+Defaults are **off**. Enable only when dashboards need stuck-after-ready / recreate-vs-rename helpers.
+
+### `crossplane_xr_ready_last_transition_timestamp_seconds` / `crossplane_mr_ready_last_transition_timestamp_seconds`
+
+Unix timestamp of the Ready condition `lastTransitionTime`. Enabled with `CONDITION_TRANSITION_TIMESTAMPS=true`. Identity labels: `group`, `kind`, `version`, `namespace`, `name` (plus `uid` / `composition_revision` when `RESOURCE_IDENTITY_LABELS=true`).
+
+### `crossplane_xr_condition_info` / `crossplane_mr_condition_info`
+
+Info-style gauge `1` for the Ready condition with `type`, `reason`, and truncated `message` (max 128 runes). Enabled with `CONDITION_MESSAGE_INFO=true`. Treat messages as potentially high-cardinality / PII.
+
 ## Package metrics
 
 Low-cardinality inventory for Crossplane package meta-types: **Provider**, **Configuration**, and **Function**. Package revisions (`*Revision`) are **not** scraped.

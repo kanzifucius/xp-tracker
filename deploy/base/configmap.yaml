@@ -39,6 +39,11 @@ data:
   # Optional: emit crossplane_mr_owner_info MR→XR edge series. Default: false (prefer owner_xr_* labels)
   # MR_OWNER_INFO_METRIC: "false"
 
+  # Optional dashboard helpers (default false):
+  # CONDITION_TRANSITION_TIMESTAMPS: "false"
+  # CONDITION_MESSAGE_INFO: "false"
+  # RESOURCE_IDENTITY_LABELS: "false"
+
   # Optional: seconds between polling cycles. Default: 30
   POLL_INTERVAL_SECONDS: "30"
 
