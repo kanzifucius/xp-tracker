@@ -252,6 +252,74 @@ func TestEnrichMRClaims_AmbiguousXRLeavesTypedLabelsEmpty(t *testing.T) {
 	}
 }
 
+func TestEnrichMROwners_FromOwnerRefs(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "team-a", Name: "nop-1", XRName: "root-app",
+			OwnerXRName: "net-1", OwnerXRKind: "XNetwork", OwnerXRGroup: "g1",
+		},
+	})
+	s.EnrichMROwners()
+	got := s.SnapshotMRs()[0]
+	if got.OwnerXRName != "net-1" || got.OwnerXRKind != "XNetwork" || got.OwnerXRNamespace != "team-a" || got.OwnerXRGroup != "g1" {
+		t.Fatalf("owner: got %q/%q/%q/%q", got.OwnerXRName, got.OwnerXRKind, got.OwnerXRNamespace, got.OwnerXRGroup)
+	}
+	if got.XRName != "root-app" {
+		t.Fatalf("composite xr_name must stay root-app, got %q", got.XRName)
+	}
+}
+
+func TestEnrichMROwners_ResourceRefsFallback(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1",
+			ResourceRefs: []ComposedRef{{APIVersion: "nop.crossplane.io/v1alpha1", Kind: "NopResource", Name: "nop-1"}},
+		},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "team-a", Name: "nop-1", XRName: "root-app",
+		},
+	})
+	s.EnrichMROwners()
+	got := s.SnapshotMRs()[0]
+	if got.OwnerXRName != "net-1" || got.OwnerXRKind != "XNetwork" {
+		t.Fatalf("expected resourceRefs owner net-1/XNetwork, got %q/%q", got.OwnerXRName, got.OwnerXRKind)
+	}
+}
+
+func TestEnrichMROwners_AmbiguousResourceRefsCleared(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1",
+			ResourceRefs: []ComposedRef{{Kind: "NopResource", Name: "nop-1"}},
+		},
+	})
+	s.ReplaceXRs("g1/v1/xvaults", []XRInfo{
+		{
+			GVR: "g1/v1/xvaults", Group: "g1", Kind: "XVault", Namespace: "team-a", Name: "vault-1",
+			ResourceRefs: []ComposedRef{{Kind: "NopResource", Name: "nop-1"}},
+		},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "team-a", Name: "nop-1", XRName: "root"},
+	})
+	s.EnrichMROwners()
+	got := s.SnapshotMRs()[0]
+	if got.OwnerXRName != "" || got.OwnerXRKind != "" {
+		t.Fatalf("ambiguous resourceRefs must leave owner empty, got %q/%q", got.OwnerXRName, got.OwnerXRKind)
+	}
+}
+
 func TestEnrichXRParents_ResolvesNamespacedParent(t *testing.T) {
 	s := New()
 	s.ReplaceXRs("g1/v1/xapps", []XRInfo{

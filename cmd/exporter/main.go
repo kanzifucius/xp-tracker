@@ -122,9 +122,11 @@ func run() error {
 	// Start the HTTP metrics server.
 	mrXRParent := cfg.MRXRParentLabels
 	xrParent := cfg.XRParentLabels
+	mrOwnerXR := cfg.MROwnerXRLabels
 	srv := server.New(cfg.MetricsAddr, s, server.Options{
 		MRXRParentLabels: &mrXRParent,
 		XRParentLabels:   &xrParent,
+		MROwnerXRLabels:  &mrOwnerXR,
 	})
 	go func() {
 		if err := srv.Run(ctx); err != nil {

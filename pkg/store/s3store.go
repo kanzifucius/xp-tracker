@@ -67,6 +67,7 @@ func (s *S3Store) EnrichClaimCompositions()                        { s.mem.Enric
 func (s *S3Store) EnrichXRClaims()                                 { s.mem.EnrichXRClaims() }
 func (s *S3Store) EnrichXRParents()                                { s.mem.EnrichXRParents() }
 func (s *S3Store) EnrichMRClaims()                                 { s.mem.EnrichMRClaims() }
+func (s *S3Store) EnrichMROwners()                                 { s.mem.EnrichMROwners() }
 func (s *S3Store) SnapshotClaims() []ClaimInfo                     { return s.mem.SnapshotClaims() }
 func (s *S3Store) SnapshotXRs() []XRInfo                           { return s.mem.SnapshotXRs() }
 func (s *S3Store) SnapshotMRs() []MRInfo                           { return s.mem.SnapshotMRs() }

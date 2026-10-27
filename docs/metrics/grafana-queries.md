@@ -143,7 +143,7 @@ sum by (parent_kind, parent_name, parent_namespace, kind)(crossplane_xr_total)
 
 ## MR queries
 
-Modern ownership is **XR → MR**. Prefer `xr_name` / `xr_kind` / `xr_namespace` / `xr_group` (enabled by default via `MR_XR_PARENT_LABELS`). Do not require `claim_*` — those are empty on native Crossplane v2 trees.
+Modern ownership is **XR → MR**. Prefer `xr_name` / `xr_kind` / `xr_namespace` / `xr_group` for composite-label identity (default via `MR_XR_PARENT_LABELS`). Prefer `owner_xr_*` for **immediate** placement under a nested XR (default via `MR_OWNER_XR_LABELS`). Do not require `claim_*` — those are empty on native Crossplane v2 trees.
 
 ### XR-linked MRs by kind
 
@@ -162,6 +162,28 @@ sum by (xr_group, xr_kind, xr_namespace, xr_name)(crossplane_mr_total)
 ```promql
 max by (name, namespace, synced, ready)(
   crossplane_mr_total{xr_group="example.org", xr_kind="App", xr_namespace="default", xr_name="my-app"}
+)
+```
+
+### MRs by immediate owner XR
+
+```promql
+sum by (owner_xr_group, owner_xr_kind, owner_xr_namespace, owner_xr_name)(crossplane_mr_total)
+```
+
+### MRs under an intermediate XR (nested trees)
+
+```promql
+sum by (kind, name)(
+  crossplane_mr_total{owner_xr_kind="XNetwork", owner_xr_name="net-1", owner_xr_namespace="default"}
+)
+```
+
+### Where composite label and immediate owner diverge
+
+```promql
+count by (xr_name, owner_xr_name)(
+  crossplane_mr_total{xr_name!="", owner_xr_name!="", xr_name!=owner_xr_name}
 )
 ```
 

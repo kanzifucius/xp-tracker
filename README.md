@@ -183,6 +183,7 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `COMPOSITE_LABEL_KEY` | no | `crossplane.io/composite` | Label key on MRs linking them to a composite |
 | `MR_XR_PARENT_LABELS` | no | `true` | Include `xr_kind` / `xr_namespace` / `xr_group` on `crossplane_mr_*` (set `false` to omit) |
 | `XR_PARENT_LABELS` | no | `true` | Include `parent_kind` / `parent_name` / `parent_namespace` on `crossplane_xr_*` from ownerReferences (set `false` to omit) |
+| `MR_OWNER_XR_LABELS` | no | `true` | Include `owner_xr_name` / `owner_xr_kind` / `owner_xr_namespace` / `owner_xr_group` on `crossplane_mr_*` (set `false` to omit) |
 | `MR_GVRS` | no | `""` | Additional MR GVRs merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | no | `300` | Seconds between XRD/MRD re-discovery cycles; `0` disables periodic re-discovery |
@@ -236,7 +237,7 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 | `crossplane_xr_status_ready` | Gauge | same as `crossplane_xr_total` | Per-XR Ready status (1=true, 0=false) |
 | `crossplane_xr_created_timestamp_seconds` | Gauge | same as `crossplane_xr_total` | Unix creation timestamp |
 | `crossplane_xr_deletion_timestamp_seconds` | Gauge | same as `crossplane_xr_total` | Unix deletion timestamp (while deleting) |
-| `crossplane_mr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `xr_name`, `xr_kind`, `xr_namespace`, `xr_group`, `claim_name`, `claim_namespace`, `provider`, `provider_config`, `external_name`, `management_policies`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of XR-linked MRs (`xr_kind`/`xr_namespace`/`xr_group` omitted when `MR_XR_PARENT_LABELS=false`) |
+| `crossplane_mr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `xr_name`, `xr_kind`, `xr_namespace`, `xr_group`, `owner_xr_name`, `owner_xr_kind`, `owner_xr_namespace`, `owner_xr_group`, `claim_name`, `claim_namespace`, `provider`, `provider_config`, `external_name`, `management_policies`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of XR-linked MRs (`xr_*` typed omitted when `MR_XR_PARENT_LABELS=false`; `owner_xr_*` omitted when `MR_OWNER_XR_LABELS=false`) |
 | `crossplane_mr_ready` | Gauge | same as `crossplane_mr_total` | Number of MRs with Ready=True |
 | `crossplane_mr_status_synced` | Gauge | same as `crossplane_mr_total` | Per-MR Synced status (1=true, 0=false) |
 | `crossplane_mr_status_ready` | Gauge | same as `crossplane_mr_total` | Per-MR Ready status (1=true, 0=false) |

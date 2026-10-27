@@ -100,10 +100,14 @@ Total number of XR-linked provider managed resources (MRs), broken down by label
 | `version` | API version from the GVR |
 | `namespace` | Kubernetes namespace |
 | `name` | MR metadata name |
-| `xr_name` | Composite (XR) name from the composite label |
+| `xr_name` | Composite (XR) name from the composite label (often the root in nested trees) |
 | `xr_kind` | Kind of the backing XR (from store enrichment); empty if the XR is not yet in the store. Omitted when `MR_XR_PARENT_LABELS=false` |
 | `xr_namespace` | Namespace of the backing XR (empty for cluster-scoped XRs). Omitted when `MR_XR_PARENT_LABELS=false` |
 | `xr_group` | API group of the backing XR. Omitted when `MR_XR_PARENT_LABELS=false` |
+| `owner_xr_name` | Immediate composing XR name from `ownerReferences` (else unique parent `resourceRefs` hit). Distinct from `xr_name`. Omitted when `MR_OWNER_XR_LABELS=false` |
+| `owner_xr_kind` | Immediate composing XR kind. Omitted when `MR_OWNER_XR_LABELS=false` |
+| `owner_xr_namespace` | Immediate composing XR namespace (empty when cluster-scoped). Omitted when `MR_OWNER_XR_LABELS=false` |
+| `owner_xr_group` | Immediate composing XR API group. Omitted when `MR_OWNER_XR_LABELS=false` |
 | `claim_name` | Claim name linked to the MR (legacy claim path only); empty for native v2 resources |
 | `claim_namespace` | Claim namespace linked to the MR (legacy claim path only); empty for native v2 resources |
 | `provider` | Provider package name from MRD discovery (e.g. `provider-nop`) |
@@ -193,6 +197,7 @@ Claim/XR/MR cardinality tracks inventory size plus status labels. Package series
 - **XR claim linkage**: `claim_name` and `claim_namespace` on legacy XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name. Native v2 XRs leave both labels empty — that is expected; claims are uncommon on Crossplane v2.
 - **XR → XR nesting (primary)**: with `XR_PARENT_LABELS` enabled (the default), `parent_kind` / `parent_name` / `parent_namespace` come from the child’s `metadata.ownerReferences` (prefer `controller: true`), then validated against the inventoried XR set. Roots emit empty `parent_name` (and empty kind/namespace) — do not invent sentinels. Claim kinds are never treated as `parent_*`. Ambiguous or non-XR owners stay empty rather than guessing. Prefer these labels over kind allowlists or name-suffix heuristics.
 - **MR → XR ownership (composite label)**: `xr_name` comes from the composite label. With `MR_XR_PARENT_LABELS` enabled (the default), xp-tracker also sets `xr_kind`, `xr_namespace`, and `xr_group` from the backing XR in the store (prefer same namespace, else cluster-scoped). If more than one XR shares that name in the preferred scope (distinct kinds/groups), the typed labels stay empty rather than guessing. Prefer these labels for joins on modern fleets; do not require `claim_*`.
+- **MR → immediate XR (placement)**: with `MR_OWNER_XR_LABELS` enabled (the default), `owner_xr_*` names the XR that immediately owns the MR via `ownerReferences` (prefer `controller: true`), falling back to a unique XR `resourceRefs` match. Never copied from `xr_name`. In nested trees `xr_name` may name the root while `owner_xr_*` names the intermediate Network/KeyVault XR — that difference is intentional.
 - **MR claim linkage (legacy)**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker copies them from the backing XR when that XR has claim fields. Empty on native v2 trees.
 - **MR scope**: only provider MRs with the composite label are tracked.
 - **Composition**: composition is resolved internally for enrichment but is not exposed as a Prometheus label dimension.
