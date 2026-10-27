@@ -104,7 +104,6 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		xr.ParentUID = parent.UID
 	}
 	xr.ResourceRefs = extractResourceRefs(obj.Object)
-	xr.UID = string(obj.GetUID())
 	xr.CompositionRevision = compositionRevision(obj)
 
 	// Extract standard Crossplane status conditions.
