@@ -79,6 +79,7 @@ type MRInfo struct {
 	OwnerXRKind        string    `json:"ownerXRKind,omitempty"`      // immediate composing XR kind
 	OwnerXRNamespace   string    `json:"ownerXRNamespace,omitempty"` // immediate composing XR namespace
 	OwnerXRGroup       string    `json:"ownerXRGroup,omitempty"`     // immediate composing XR API group
+	OwnerXRUID         string    `json:"ownerXRUID,omitempty"`       // ownerReference UID — required for ownerRefs match
 	ClaimName          string    `json:"claimName"`                  // enriched from XR or MR labels (legacy claim path)
 	ClaimNS            string    `json:"claimNamespace"`             // enriched from XR or MR labels (legacy claim path)
 	Provider           string    `json:"provider"`                   // pkg.crossplane.io/package from MRD discovery
@@ -404,14 +405,16 @@ func (s *MemoryStore) EnrichMROwners() {
 			mr.OwnerXRName = owner.Name
 			mr.OwnerXRNamespace = owner.Namespace
 			mr.OwnerXRGroup = owner.Group
+			mr.OwnerXRUID = owner.UID
 			s.mrs[key] = mr
 			continue
 		}
-		if mr.OwnerXRName != "" || mr.OwnerXRKind != "" || mr.OwnerXRNamespace != "" || mr.OwnerXRGroup != "" {
+		if mr.OwnerXRName != "" || mr.OwnerXRKind != "" || mr.OwnerXRNamespace != "" || mr.OwnerXRGroup != "" || mr.OwnerXRUID != "" {
 			mr.OwnerXRKind = ""
 			mr.OwnerXRName = ""
 			mr.OwnerXRNamespace = ""
 			mr.OwnerXRGroup = ""
+			mr.OwnerXRUID = ""
 			s.mrs[key] = mr
 		}
 	}
@@ -419,37 +422,45 @@ func (s *MemoryStore) EnrichMROwners() {
 
 func (s *MemoryStore) resolveMROwner(mr MRInfo) (XRInfo, bool) {
 	if mr.OwnerXRName != "" {
-		if owner, ok := s.lookupOwnerXR(mr.Namespace, mr.OwnerXRName, mr.OwnerXRKind, mr.OwnerXRGroup); ok {
+		if owner, ok := s.lookupOwnerXR(mr); ok {
 			return owner, true
 		}
 	}
 	return s.findXRByResourceRef(mr)
 }
 
-// lookupOwnerXR finds the unique inventoried XR matching an MR owner candidate.
-func (s *MemoryStore) lookupOwnerXR(mrNamespace, name, kind, group string) (XRInfo, bool) {
+// lookupOwnerXR finds the unique inventoried XR matching an MR ownerRefs
+// candidate. Requires a non-empty exact OwnerXRUID ↔ UID match so orphaned
+// MRs do not attach to a same-name replacement of the deleted owner.
+func (s *MemoryStore) lookupOwnerXR(mr MRInfo) (XRInfo, bool) {
+	if mr.OwnerXRUID == "" {
+		return XRInfo{}, false
+	}
 	var namespaced, cluster []XRInfo
 	for _, cand := range s.xrs {
-		if cand.Name != name {
+		if cand.Name != mr.OwnerXRName {
 			continue
 		}
-		if kind != "" && cand.Kind != kind {
+		if mr.OwnerXRKind != "" && cand.Kind != mr.OwnerXRKind {
 			continue
 		}
-		if group != "" && cand.Group != group {
+		if mr.OwnerXRGroup != "" && cand.Group != mr.OwnerXRGroup {
+			continue
+		}
+		if cand.UID == "" || cand.UID != mr.OwnerXRUID {
 			continue
 		}
 		switch {
 		case cand.Namespace == "":
 			cluster = append(cluster, cand)
-		case mrNamespace != "" && cand.Namespace == mrNamespace:
+		case mr.Namespace != "" && cand.Namespace == mr.Namespace:
 			namespaced = append(namespaced, cand)
 		}
 	}
-	if mrNamespace != "" && len(namespaced) == 1 {
+	if mr.Namespace != "" && len(namespaced) == 1 {
 		return namespaced[0], true
 	}
-	if mrNamespace != "" && len(namespaced) > 1 {
+	if mr.Namespace != "" && len(namespaced) > 1 {
 		return XRInfo{}, false
 	}
 	if len(cluster) == 1 {

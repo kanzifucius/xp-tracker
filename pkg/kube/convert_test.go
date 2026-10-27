@@ -425,8 +425,8 @@ func TestUnstructuredToMR_OwnerFromOwnerReferences(t *testing.T) {
 	if mr.XRName != "root-app" {
 		t.Fatalf("xr_name: got %q", mr.XRName)
 	}
-	if mr.OwnerXRName != "net-1" || mr.OwnerXRKind != "XNetwork" || mr.OwnerXRGroup != "platform.example.org" {
-		t.Fatalf("owner: got %q/%q/%q", mr.OwnerXRName, mr.OwnerXRKind, mr.OwnerXRGroup)
+	if mr.OwnerXRName != "net-1" || mr.OwnerXRKind != "XNetwork" || mr.OwnerXRGroup != "platform.example.org" || mr.OwnerXRUID != "uid-net" {
+		t.Fatalf("owner: got %q/%q/%q/%q", mr.OwnerXRName, mr.OwnerXRKind, mr.OwnerXRGroup, mr.OwnerXRUID)
 	}
 }
 

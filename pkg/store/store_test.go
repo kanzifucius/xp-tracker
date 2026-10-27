@@ -255,22 +255,42 @@ func TestEnrichMRClaims_AmbiguousXRLeavesTypedLabelsEmpty(t *testing.T) {
 func TestEnrichMROwners_FromOwnerRefs(t *testing.T) {
 	s := New()
 	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
-		{GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1"},
+		{GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1", UID: "uid-net-1"},
 	})
 	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
 		{
 			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
 			Namespace: "team-a", Name: "nop-1", XRName: "root-app",
-			OwnerXRName: "net-1", OwnerXRKind: "XNetwork", OwnerXRGroup: "g1",
+			OwnerXRName: "net-1", OwnerXRKind: "XNetwork", OwnerXRGroup: "g1", OwnerXRUID: "uid-net-1",
 		},
 	})
 	s.EnrichMROwners()
 	got := s.SnapshotMRs()[0]
-	if got.OwnerXRName != "net-1" || got.OwnerXRKind != "XNetwork" || got.OwnerXRNamespace != "team-a" || got.OwnerXRGroup != "g1" {
-		t.Fatalf("owner: got %q/%q/%q/%q", got.OwnerXRName, got.OwnerXRKind, got.OwnerXRNamespace, got.OwnerXRGroup)
+	if got.OwnerXRName != "net-1" || got.OwnerXRKind != "XNetwork" || got.OwnerXRNamespace != "team-a" || got.OwnerXRGroup != "g1" || got.OwnerXRUID != "uid-net-1" {
+		t.Fatalf("owner: got %q/%q/%q/%q/%q", got.OwnerXRName, got.OwnerXRKind, got.OwnerXRNamespace, got.OwnerXRGroup, got.OwnerXRUID)
 	}
 	if got.XRName != "root-app" {
 		t.Fatalf("composite xr_name must stay root-app, got %q", got.XRName)
+	}
+}
+
+func TestEnrichMROwners_RejectsSameNameReplacement(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1", UID: "uid-net-new"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "team-a", Name: "nop-1",
+			OwnerXRName: "net-1", OwnerXRKind: "XNetwork", OwnerXRGroup: "g1", OwnerXRUID: "uid-net-old",
+		},
+	})
+	s.EnrichMROwners()
+	got := s.SnapshotMRs()[0]
+	if got.OwnerXRName != "" || got.OwnerXRUID != "" {
+		t.Fatalf("stale owner UID must not attach to same-name replacement, got name=%q uid=%q",
+			got.OwnerXRName, got.OwnerXRUID)
 	}
 }
 

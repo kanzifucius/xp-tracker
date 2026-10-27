@@ -232,10 +232,12 @@ func UnstructuredToMR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 
 	// Immediate composing XR from ownerReferences (validated / fallback in store).
 	// Do not copy xr_name here — composite label and immediate owner may diverge.
+	// Owner UID is preserved so store enrichment can reject same-name replacements.
 	if owner, ok := immediateXROwner(obj.GetOwnerReferences()); ok {
 		mr.OwnerXRKind = owner.Kind
 		mr.OwnerXRName = owner.Name
 		mr.OwnerXRGroup = owner.Group
+		mr.OwnerXRUID = owner.UID
 	}
 
 	mr.Synced = extractConditionStatus(obj.Object, "Synced")
