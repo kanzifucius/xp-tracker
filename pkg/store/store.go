@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,28 +30,37 @@ type ClaimInfo struct {
 
 // XRInfo holds extracted metadata for a single Crossplane composite resource.
 type XRInfo struct {
-	GVR               string    `json:"gvr"` // "group/version/resource"
-	Group             string    `json:"group"`
-	Version           string    `json:"version"` // API version from the GVR
-	Kind              string    `json:"kind"`
-	Namespace         string    `json:"namespace"` // usually empty for cluster-scoped XRs
-	Name              string    `json:"name"`
-	UID               string    `json:"uid,omitempty"` // metadata.uid — used to validate ownerReferences
-	ClaimName         string    `json:"claimName"`
-	ClaimNS           string    `json:"claimNamespace"`
-	Composition       string    `json:"composition"`
-	ParentKind        string    `json:"parentKind,omitempty"`      // immediate XR owner kind from ownerReferences
-	ParentName        string    `json:"parentName,omitempty"`      // immediate XR owner name; empty for roots
-	ParentNamespace   string    `json:"parentNamespace,omitempty"` // resolved namespaced parent; empty for cluster-scoped / roots
-	ParentGroup       string    `json:"parentGroup,omitempty"`     // API group of parent (internal join / validation)
-	ParentUID         string    `json:"parentUID,omitempty"`       // ownerReference UID — required for parent match
-	ClaimsUnsupported bool      `json:"-"`                         // true for modern XRs that cannot be backed by claims
-	Paused            bool      `json:"paused"`                    // crossplane.io/paused annotation
-	Synced            bool      `json:"synced"`
-	Ready             bool      `json:"ready"`
-	Reason            string    `json:"reason"`              // Ready condition reason
-	CreatedAt         time.Time `json:"createdAt"`           // metadata.creationTimestamp
-	DeletedAt         time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+	GVR               string        `json:"gvr"` // "group/version/resource"
+	Group             string        `json:"group"`
+	Version           string        `json:"version"` // API version from the GVR
+	Kind              string        `json:"kind"`
+	Namespace         string        `json:"namespace"` // usually empty for cluster-scoped XRs
+	Name              string        `json:"name"`
+	UID               string        `json:"uid,omitempty"` // metadata.uid — used to validate ownerReferences
+	ClaimName         string        `json:"claimName"`
+	ClaimNS           string        `json:"claimNamespace"`
+	Composition       string        `json:"composition"`
+	ParentKind        string        `json:"parentKind,omitempty"`      // immediate XR owner kind from ownerReferences
+	ParentName        string        `json:"parentName,omitempty"`      // immediate XR owner name; empty for roots
+	ParentNamespace   string        `json:"parentNamespace,omitempty"` // resolved namespaced parent; empty for cluster-scoped / roots
+	ParentGroup       string        `json:"parentGroup,omitempty"`     // API group of parent (internal join / validation)
+	ParentUID         string        `json:"parentUID,omitempty"`       // ownerReference UID — required for parent match
+	ResourceRefs      []ComposedRef `json:"resourceRefs,omitempty"`    // composed children from resourceRefs
+	ClaimsUnsupported bool          `json:"-"`                         // true for modern XRs that cannot be backed by claims
+	Paused            bool          `json:"paused"`                    // crossplane.io/paused annotation
+	Synced            bool          `json:"synced"`
+	Ready             bool          `json:"ready"`
+	Reason            string        `json:"reason"`              // Ready condition reason
+	CreatedAt         time.Time     `json:"createdAt"`           // metadata.creationTimestamp
+	DeletedAt         time.Time     `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+}
+
+// ComposedRef is a composed child listed on an XR (resourceRefs).
+// Used for MR owner fallback and optional edge metrics — not a Prom label dump.
+type ComposedRef struct {
+	APIVersion string `json:"apiVersion,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	Name       string `json:"name,omitempty"`
 }
 
 // MRInfo holds extracted metadata for a single Crossplane provider Managed Resource.
@@ -61,17 +71,22 @@ type MRInfo struct {
 	Kind               string    `json:"kind"`
 	Namespace          string    `json:"namespace"`
 	Name               string    `json:"name"`
-	XRName             string    `json:"xrName"`             // crossplane.io/composite label
-	XRKind             string    `json:"xrKind"`             // enriched from backing XR kind
-	XRNamespace        string    `json:"xrNamespace"`        // enriched from backing XR namespace
-	XRGroup            string    `json:"xrGroup"`            // enriched from backing XR API group
-	ClaimName          string    `json:"claimName"`          // enriched from XR or MR labels (legacy claim path)
-	ClaimNS            string    `json:"claimNamespace"`     // enriched from XR or MR labels (legacy claim path)
-	Provider           string    `json:"provider"`           // pkg.crossplane.io/package from MRD discovery
-	ProviderConfig     string    `json:"providerConfig"`     // spec.providerConfigRef.name
-	ExternalName       string    `json:"externalName"`       // crossplane.io/external-name annotation
-	ManagementPolicies string    `json:"managementPolicies"` // joined spec.managementPolicies
-	Paused             bool      `json:"paused"`             // crossplane.io/paused annotation
+	XRName             string    `json:"xrName"`                     // crossplane.io/composite label
+	XRKind             string    `json:"xrKind"`                     // enriched from backing XR kind
+	XRNamespace        string    `json:"xrNamespace"`                // enriched from backing XR namespace
+	XRGroup            string    `json:"xrGroup"`                    // enriched from backing XR API group
+	OwnerXRName        string    `json:"ownerXRName,omitempty"`      // immediate composing XR name (ownerRefs / resourceRefs)
+	OwnerXRKind        string    `json:"ownerXRKind,omitempty"`      // immediate composing XR kind
+	OwnerXRNamespace   string    `json:"ownerXRNamespace,omitempty"` // immediate composing XR namespace
+	OwnerXRGroup       string    `json:"ownerXRGroup,omitempty"`     // immediate composing XR API group
+	OwnerXRUID         string    `json:"ownerXRUID,omitempty"`       // ownerReference UID — required for ownerRefs match
+	ClaimName          string    `json:"claimName"`                  // enriched from XR or MR labels (legacy claim path)
+	ClaimNS            string    `json:"claimNamespace"`             // enriched from XR or MR labels (legacy claim path)
+	Provider           string    `json:"provider"`                   // pkg.crossplane.io/package from MRD discovery
+	ProviderConfig     string    `json:"providerConfig"`             // spec.providerConfigRef.name
+	ExternalName       string    `json:"externalName"`               // crossplane.io/external-name annotation
+	ManagementPolicies string    `json:"managementPolicies"`         // joined spec.managementPolicies
+	Paused             bool      `json:"paused"`                     // crossplane.io/paused annotation
 	Synced             bool      `json:"synced"`
 	Ready              bool      `json:"ready"`
 	Reason             string    `json:"reason"`
@@ -103,6 +118,7 @@ type Store interface {
 	EnrichXRClaims()
 	EnrichXRParents()
 	EnrichMRClaims()
+	EnrichMROwners()
 	SnapshotClaims() []ClaimInfo
 	SnapshotXRs() []XRInfo
 	SnapshotMRs() []MRInfo
@@ -373,6 +389,118 @@ func (s *MemoryStore) lookupParentXR(child XRInfo) (XRInfo, bool) {
 		return cluster[0], true
 	}
 	return XRInfo{}, false
+}
+
+// EnrichMROwners resolves each MR's immediate composing XR.
+// Preference: ownerReferences candidate from convert (validated against
+// inventory); else a unique XR whose resourceRefs list this MR (GVK+name).
+// Never copies xr_name into owner_xr_* (nesting must remain visible).
+func (s *MemoryStore) EnrichMROwners() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, mr := range s.mrs {
+		if owner, ok := s.resolveMROwner(mr); ok {
+			mr.OwnerXRKind = owner.Kind
+			mr.OwnerXRName = owner.Name
+			mr.OwnerXRNamespace = owner.Namespace
+			mr.OwnerXRGroup = owner.Group
+			mr.OwnerXRUID = owner.UID
+			s.mrs[key] = mr
+			continue
+		}
+		if mr.OwnerXRName != "" || mr.OwnerXRKind != "" || mr.OwnerXRNamespace != "" || mr.OwnerXRGroup != "" || mr.OwnerXRUID != "" {
+			mr.OwnerXRKind = ""
+			mr.OwnerXRName = ""
+			mr.OwnerXRNamespace = ""
+			mr.OwnerXRGroup = ""
+			mr.OwnerXRUID = ""
+			s.mrs[key] = mr
+		}
+	}
+}
+
+func (s *MemoryStore) resolveMROwner(mr MRInfo) (XRInfo, bool) {
+	if mr.OwnerXRName != "" {
+		if owner, ok := s.lookupOwnerXR(mr); ok {
+			return owner, true
+		}
+	}
+	return s.findXRByResourceRef(mr)
+}
+
+// lookupOwnerXR finds the unique inventoried XR matching an MR ownerRefs
+// candidate. Requires a non-empty exact OwnerXRUID ↔ UID match so orphaned
+// MRs do not attach to a same-name replacement of the deleted owner.
+func (s *MemoryStore) lookupOwnerXR(mr MRInfo) (XRInfo, bool) {
+	if mr.OwnerXRUID == "" {
+		return XRInfo{}, false
+	}
+	var namespaced, cluster []XRInfo
+	for _, cand := range s.xrs {
+		if cand.Name != mr.OwnerXRName {
+			continue
+		}
+		if mr.OwnerXRKind != "" && cand.Kind != mr.OwnerXRKind {
+			continue
+		}
+		if mr.OwnerXRGroup != "" && cand.Group != mr.OwnerXRGroup {
+			continue
+		}
+		if cand.UID == "" || cand.UID != mr.OwnerXRUID {
+			continue
+		}
+		switch {
+		case cand.Namespace == "":
+			cluster = append(cluster, cand)
+		case mr.Namespace != "" && cand.Namespace == mr.Namespace:
+			namespaced = append(namespaced, cand)
+		}
+	}
+	if mr.Namespace != "" && len(namespaced) == 1 {
+		return namespaced[0], true
+	}
+	if mr.Namespace != "" && len(namespaced) > 1 {
+		return XRInfo{}, false
+	}
+	if len(cluster) == 1 {
+		return cluster[0], true
+	}
+	return XRInfo{}, false
+}
+
+// findXRByResourceRef returns the unique XR whose resourceRefs include this MR.
+func (s *MemoryStore) findXRByResourceRef(mr MRInfo) (XRInfo, bool) {
+	var hits []XRInfo
+	for _, xr := range s.xrs {
+		if mr.Namespace != "" && xr.Namespace != "" && xr.Namespace != mr.Namespace {
+			continue
+		}
+		for _, ref := range xr.ResourceRefs {
+			if ref.Name != mr.Name {
+				continue
+			}
+			if ref.Kind != "" && ref.Kind != mr.Kind {
+				continue
+			}
+			if ref.APIVersion != "" {
+				group, _, _ := strings.Cut(ref.APIVersion, "/")
+				// Core apiVersion "v1" has no slash; treat as empty group.
+				if !strings.Contains(ref.APIVersion, "/") {
+					group = ""
+				}
+				if group != "" && group != mr.Group {
+					continue
+				}
+			}
+			hits = append(hits, xr)
+			break
+		}
+	}
+	if len(hits) != 1 {
+		return XRInfo{}, false
+	}
+	return hits[0], true
 }
 
 // EnrichMRClaims resolves each MR's backing XR (via xr_name / composite label)

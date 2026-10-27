@@ -11,7 +11,7 @@ import (
 
 func TestMRCollector_Empty(t *testing.T) {
 	s := store.New()
-	c := NewMRCollector(s, true)
+	c := NewMRCollector(s, true, true)
 
 	families := gatherCollector(t, c)
 	totalFam := families["crossplane_mr_total"]
@@ -44,7 +44,7 @@ func TestMRCollector_WithData(t *testing.T) {
 		},
 	})
 
-	c := NewMRCollector(s, true)
+	c := NewMRCollector(s, true, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_mr_total"]
@@ -75,6 +75,10 @@ func TestMRCollector_WithData(t *testing.T) {
 	assertLabel(t, labels, "xr_kind", "XWidget")
 	assertLabel(t, labels, "xr_namespace", "team-alpha")
 	assertLabel(t, labels, "xr_group", "samples.xptracker.dev")
+	assertLabel(t, labels, "owner_xr_name", "")
+	assertLabel(t, labels, "owner_xr_kind", "")
+	assertLabel(t, labels, "owner_xr_namespace", "")
+	assertLabel(t, labels, "owner_xr_group", "")
 	assertLabel(t, labels, "claim_name", "widget-a")
 	assertLabel(t, labels, "claim_namespace", "team-alpha")
 	assertLabel(t, labels, "provider", "provider-nop")
@@ -107,7 +111,7 @@ func TestMRCollector_XRParentLabelsDisabled(t *testing.T) {
 		},
 	})
 
-	c := NewMRCollector(s, false)
+	c := NewMRCollector(s, false, true)
 	families := gatherCollector(t, c)
 	totalFam := families["crossplane_mr_total"]
 	if totalFam == nil {
@@ -122,9 +126,52 @@ func TestMRCollector_XRParentLabelsDisabled(t *testing.T) {
 	}
 }
 
+func TestMRCollector_OwnerXRLabels(t *testing.T) {
+	s := store.New()
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []store.MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
+			Namespace: "default", Name: "nop-1", XRName: "root-app",
+			XRKind: "XApp", XRNamespace: "default", XRGroup: "platform.example.org",
+			OwnerXRName: "net-1", OwnerXRKind: "XNetwork", OwnerXRNamespace: "default", OwnerXRGroup: "platform.example.org",
+			Synced: true, Ready: true,
+		},
+	})
+
+	c := NewMRCollector(s, true, true)
+	families := gatherCollector(t, c)
+	labels := findLabelsByLabelValue(t, families["crossplane_mr_total"].GetMetric(), "name", "nop-1")
+	assertLabel(t, labels, "xr_name", "root-app")
+	assertLabel(t, labels, "owner_xr_name", "net-1")
+	assertLabel(t, labels, "owner_xr_kind", "XNetwork")
+	assertLabel(t, labels, "owner_xr_namespace", "default")
+	assertLabel(t, labels, "owner_xr_group", "platform.example.org")
+}
+
+func TestMRCollector_OwnerXRLabelsDisabled(t *testing.T) {
+	s := store.New()
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []store.MRInfo{
+		{
+			GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Version: "v1alpha1", Kind: "NopResource",
+			Namespace: "default", Name: "nop-1", XRName: "xr-1",
+			OwnerXRName: "net-1", OwnerXRKind: "XNetwork",
+			Synced: true, Ready: true,
+		},
+	})
+
+	c := NewMRCollector(s, true, false)
+	families := gatherCollector(t, c)
+	labels := findLabelsByLabelValue(t, families["crossplane_mr_total"].GetMetric(), "name", "nop-1")
+	for _, name := range []string{"owner_xr_name", "owner_xr_kind", "owner_xr_namespace", "owner_xr_group"} {
+		if _, ok := labels[name]; ok {
+			t.Errorf("expected %s omitted when owner XR labels disabled", name)
+		}
+	}
+}
+
 func TestMRCollector_Describe(t *testing.T) {
 	s := store.New()
-	c := NewMRCollector(s, true)
+	c := NewMRCollector(s, true, true)
 
 	ch := make(chan *prometheus.Desc, 10)
 	c.Describe(ch)
@@ -155,7 +202,7 @@ func TestMRCollector_Deleting(t *testing.T) {
 		},
 	})
 
-	c := NewMRCollector(s, true)
+	c := NewMRCollector(s, true, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_mr_total"]

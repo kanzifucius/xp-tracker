@@ -30,6 +30,9 @@ data:
   # Optional: include typed XR parent labels (xr_kind, xr_namespace, xr_group) on crossplane_mr_* series. Default: true
   # MR_XR_PARENT_LABELS: "true"
 
+  # Optional: include immediate owner XR labels (owner_xr_*) on crossplane_mr_* series. Default: true
+  # MR_OWNER_XR_LABELS: "true"
+
   # Optional: seconds between polling cycles. Default: 30
   POLL_INTERVAL_SECONDS: "30"
 

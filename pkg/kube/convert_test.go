@@ -374,6 +374,62 @@ func TestImmediateXROwner_Ambiguous(t *testing.T) {
 	}
 }
 
+func TestUnstructuredToXR_ResourceRefs(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "platform.example.org", Version: "v1alpha1", Resource: "xapps"}
+	cfg := &config.Config{}
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "platform.example.org/v1alpha1",
+		"kind":       "XApp",
+		"metadata":   map[string]interface{}{"name": "app-1", "namespace": "team-a"},
+		"spec": map[string]interface{}{
+			"crossplane": map[string]interface{}{
+				"resourceRefs": []interface{}{
+					map[string]interface{}{
+						"apiVersion": "nop.crossplane.io/v1alpha1",
+						"kind":       "NopResource",
+						"name":       "nop-1",
+					},
+				},
+			},
+		},
+	}}
+	xr := UnstructuredToXR(*obj, gvr, cfg)
+	if len(xr.ResourceRefs) != 1 || xr.ResourceRefs[0].Name != "nop-1" || xr.ResourceRefs[0].Kind != "NopResource" {
+		t.Fatalf("resourceRefs: %+v", xr.ResourceRefs)
+	}
+}
+
+func TestUnstructuredToMR_OwnerFromOwnerReferences(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "nop.crossplane.io", Version: "v1alpha1", Resource: "nopresources"}
+	cfg := &config.Config{CompositeLabelKey: "crossplane.io/composite"}
+	ctrl := true
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "nop.crossplane.io/v1alpha1",
+		"kind":       "NopResource",
+		"metadata": map[string]interface{}{
+			"name":      "nop-1",
+			"namespace": "team-a",
+			"labels": map[string]interface{}{
+				"crossplane.io/composite": "root-app",
+			},
+		},
+	}}
+	obj.SetOwnerReferences([]metav1.OwnerReference{{
+		APIVersion: "platform.example.org/v1alpha1",
+		Kind:       "XNetwork",
+		Name:       "net-1",
+		Controller: &ctrl,
+		UID:        "uid-net",
+	}})
+	mr := UnstructuredToMR(*obj, gvr, cfg, "provider-nop")
+	if mr.XRName != "root-app" {
+		t.Fatalf("xr_name: got %q", mr.XRName)
+	}
+	if mr.OwnerXRName != "net-1" || mr.OwnerXRKind != "XNetwork" || mr.OwnerXRGroup != "platform.example.org" || mr.OwnerXRUID != "uid-net" {
+		t.Fatalf("owner: got %q/%q/%q/%q", mr.OwnerXRName, mr.OwnerXRKind, mr.OwnerXRGroup, mr.OwnerXRUID)
+	}
+}
+
 func TestUnstructuredToMR_Full(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "nop.crossplane.io", Version: "v1alpha1", Resource: "nopresources"}
 	cfg := &config.Config{

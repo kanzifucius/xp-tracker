@@ -103,6 +103,7 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		xr.ParentGroup = parent.Group
 		xr.ParentUID = parent.UID
 	}
+	xr.ResourceRefs = extractResourceRefs(obj.Object)
 
 	// Extract standard Crossplane status conditions.
 	xr.Synced = extractConditionStatus(obj.Object, "Synced")
@@ -229,10 +230,69 @@ func UnstructuredToMR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	mr.ProviderConfig = nestedString(obj.Object, "spec", "providerConfigRef", "name")
 	mr.ManagementPolicies = nestedStringSliceJoined(obj.Object, "spec", "managementPolicies")
 
+	// Immediate composing XR from ownerReferences (validated / fallback in store).
+	// Do not copy xr_name here — composite label and immediate owner may diverge.
+	// Owner UID is preserved so store enrichment can reject same-name replacements.
+	if owner, ok := immediateXROwner(obj.GetOwnerReferences()); ok {
+		mr.OwnerXRKind = owner.Kind
+		mr.OwnerXRName = owner.Name
+		mr.OwnerXRGroup = owner.Group
+		mr.OwnerXRUID = owner.UID
+	}
+
 	mr.Synced = extractConditionStatus(obj.Object, "Synced")
 	mr.Ready, mr.Reason = extractReadyCondition(obj.Object)
 
 	return mr
+}
+
+// extractResourceRefs reads composed child refs from legacy spec.resourceRefs
+// or v2 spec.crossplane.resourceRefs.
+func extractResourceRefs(obj map[string]interface{}) []store.ComposedRef {
+	refs := nestedObjectSlice(obj, "spec", "resourceRefs")
+	if len(refs) == 0 {
+		refs = nestedObjectSlice(obj, "spec", "crossplane", "resourceRefs")
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]store.ComposedRef, 0, len(refs))
+	for _, ref := range refs {
+		cr := store.ComposedRef{
+			APIVersion: asString(ref["apiVersion"]),
+			Kind:       asString(ref["kind"]),
+			Name:       asString(ref["name"]),
+		}
+		if cr.Name == "" && cr.Kind == "" {
+			continue
+		}
+		out = append(out, cr)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func nestedObjectSlice(obj map[string]interface{}, fields ...string) []map[string]interface{} {
+	raw, found, err := unstructured.NestedSlice(obj, fields...)
+	if err != nil || !found {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(raw))
+	for _, item := range raw {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+func asString(v interface{}) string {
+	s, _ := v.(string)
+	return s
 }
 
 // isPaused reports whether the crossplane.io/paused annotation is set to true.

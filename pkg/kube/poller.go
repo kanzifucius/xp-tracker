@@ -135,6 +135,7 @@ func (p *Poller) poll(ctx context.Context) {
 	p.store.EnrichXRClaims()
 	p.store.EnrichXRParents()
 	p.store.EnrichMRClaims()
+	p.store.EnrichMROwners()
 
 	// Only persist if the entire cycle succeeded. Persisting a partial
 	// snapshot could overwrite a valid one with incomplete data.

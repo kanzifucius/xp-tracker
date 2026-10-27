@@ -15,6 +15,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
 | `MR_XR_PARENT_LABELS` | No | `true` | When true, `crossplane_mr_*` include typed XR parent labels `xr_kind`, `xr_namespace`, `xr_group`. Set `false`/`0`/`no` to omit them |
 | `XR_PARENT_LABELS` | No | `true` | When true, `crossplane_xr_*` include `parent_kind`, `parent_name`, `parent_namespace` from XR `ownerReferences` (validated against inventory). Roots keep empty `parent_name`. Set `false`/`0`/`no` to omit them |
+| `MR_OWNER_XR_LABELS` | No | `true` | When true, `crossplane_mr_*` include `owner_xr_name`, `owner_xr_kind`, `owner_xr_namespace`, `owner_xr_group` for the immediate composing XR. Set `false`/`0`/`no` to omit them |
 | `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | No | `300` | Seconds between XRD/MRD re-discovery cycles. `0` disables periodic re-discovery (startup discovery still runs once) |
@@ -134,6 +135,16 @@ MRs are only polled when this label is present. After each poll, xp-tracker look
 2. Copies legacy `claim_name` / `claim_namespace` from the XR only when those fields are not already set from MR labels
 
 Primary ownership for modern (v2) fleets is XR → MR via `xr_name` plus the typed `xr_*` labels. Empty `claim_*` on native v2 trees is expected.
+
+## MR owner XR labels (immediate placement)
+
+With `MR_OWNER_XR_LABELS=true` (the default), each `crossplane_mr_*` series carries the **immediate** composing XR, distinct from composite-label `xr_*`:
+
+1. Prefer an XR-like `metadata.ownerReferences` entry (`controller: true` first), validated against inventoried XRs
+2. Else find a unique inventoried XR whose `spec.resourceRefs` / `spec.crossplane.resourceRefs` lists this MR (GVK+name; same namespace when namespaced)
+3. Ambiguous matches stay empty — never copy `xr_name` into `owner_xr_name`
+
+In flat trees both families usually agree. In nested trees `xr_name` may name the root while `owner_xr_*` names the intermediate XR.
 
 ## Deployment via ConfigMap
 

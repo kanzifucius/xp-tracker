@@ -34,6 +34,9 @@ type Options struct {
 	// XRParentLabels includes parent_kind / parent_name / parent_namespace on XR series.
 	// When omitted (zero value), defaults to true.
 	XRParentLabels *bool
+	// MROwnerXRLabels includes owner_xr_name / owner_xr_kind / owner_xr_namespace /
+	// owner_xr_group on MR series. When omitted, defaults to true.
+	MROwnerXRLabels *bool
 }
 
 // New creates a new metrics Server.
@@ -42,6 +45,7 @@ type Options struct {
 func New(addr string, s store.Store, opts ...Options) *Server {
 	includeMRXRParent := true
 	includeXRParent := true
+	includeMROwnerXR := true
 	if len(opts) > 0 {
 		if opts[0].MRXRParentLabels != nil {
 			includeMRXRParent = *opts[0].MRXRParentLabels
@@ -49,12 +53,15 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 		if opts[0].XRParentLabels != nil {
 			includeXRParent = *opts[0].XRParentLabels
 		}
+		if opts[0].MROwnerXRLabels != nil {
+			includeMROwnerXR = *opts[0].MROwnerXRLabels
+		}
 	}
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(metrics.NewClaimCollector(s))
 	registry.MustRegister(metrics.NewXRCollector(s, includeXRParent))
-	registry.MustRegister(metrics.NewMRCollector(s, includeMRXRParent))
+	registry.MustRegister(metrics.NewMRCollector(s, includeMRXRParent, includeMROwnerXR))
 	registry.MustRegister(metrics.NewPackageCollector(s))
 	metrics.RegisterSelfMetrics(registry)
 

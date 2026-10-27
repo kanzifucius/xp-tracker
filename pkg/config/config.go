@@ -88,6 +88,11 @@ type Config struct {
 	// Default true.
 	XRParentLabels bool
 
+	// MROwnerXRLabels controls whether crossplane_mr_* series include
+	// owner_xr_name / owner_xr_kind / owner_xr_namespace / owner_xr_group for
+	// the immediate composing XR. Default true.
+	MROwnerXRLabels bool
+
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
 
@@ -156,6 +161,7 @@ func Load() (*Config, error) {
 		CompositeLabelKey:        defaultCompositeLabelKey,
 		MRXRParentLabels:         true,
 		XRParentLabels:           true,
+		MROwnerXRLabels:          true,
 		PollIntervalSeconds:      defaultPollInterval,
 		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
 		MetricsAddr:              defaultMetricsAddr,
@@ -226,6 +232,16 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid XR_PARENT_LABELS: %w", err)
 		}
 		cfg.XRParentLabels = enabled
+	}
+
+	// Optional: MR_OWNER_XR_LABELS (default true). Set false/0/no to omit
+	// owner_xr_* on crossplane_mr_* series.
+	if v := os.Getenv("MR_OWNER_XR_LABELS"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MR_OWNER_XR_LABELS: %w", err)
+		}
+		cfg.MROwnerXRLabels = enabled
 	}
 
 	// Optional: MR_GVRS (merged with MRD discovery at startup and on refresh)

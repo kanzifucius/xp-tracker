@@ -9,29 +9,20 @@ import (
 	"github.com/kanzifucius/xp-tracker/pkg/store"
 )
 
-var (
-	mrLabelsBase = []string{
-		"group", "kind", "version", "namespace", "name", "xr_name",
-		"claim_name", "claim_namespace",
-		"provider", "provider_config", "external_name", "management_policies",
-		"synced", "ready", "reason", "paused", "deleting",
-	}
-
-	// mrLabelsWithXRParent inserts typed XR parent labels after xr_name.
-	mrLabelsWithXRParent = []string{
-		"group", "kind", "version", "namespace", "name", "xr_name",
-		"xr_kind", "xr_namespace", "xr_group",
-		"claim_name", "claim_namespace",
-		"provider", "provider_config", "external_name", "management_policies",
-		"synced", "ready", "reason", "paused", "deleting",
-	}
-)
-
-func mrLabelNames(includeXRParent bool) []string {
+func mrLabelNames(includeXRParent, includeOwnerXR bool) []string {
+	labels := []string{"group", "kind", "version", "namespace", "name", "xr_name"}
 	if includeXRParent {
-		return mrLabelsWithXRParent
+		labels = append(labels, "xr_kind", "xr_namespace", "xr_group")
 	}
-	return mrLabelsBase
+	if includeOwnerXR {
+		labels = append(labels, "owner_xr_name", "owner_xr_kind", "owner_xr_namespace", "owner_xr_group")
+	}
+	labels = append(labels,
+		"claim_name", "claim_namespace",
+		"provider", "provider_config", "external_name", "management_policies",
+		"synced", "ready", "reason", "paused", "deleting",
+	)
+	return labels
 }
 
 func newMRDescs(labels []string) (
@@ -87,6 +78,10 @@ type mrAggKey struct {
 	XRKind             string
 	XRNamespace        string
 	XRGroup            string
+	OwnerXRName        string
+	OwnerXRKind        string
+	OwnerXRNamespace   string
+	OwnerXRGroup       string
 	ClaimName          string
 	ClaimNS            string
 	Provider           string
@@ -113,6 +108,7 @@ type mrAggVal struct {
 type MRCollector struct {
 	store            store.Store
 	includeXRParent  bool
+	includeOwnerXR   bool
 	totalDesc        *prometheus.Desc
 	readyDesc        *prometheus.Desc
 	statusSyncedDesc *prometheus.Desc
@@ -122,14 +118,15 @@ type MRCollector struct {
 }
 
 // NewMRCollector creates a new MRCollector.
-// When includeXRParentLabels is true (the default in production config),
-// series include xr_kind, xr_namespace, and xr_group after xr_name.
-func NewMRCollector(s store.Store, includeXRParentLabels bool) *MRCollector {
-	labels := mrLabelNames(includeXRParentLabels)
+// includeXRParentLabels adds composite-label typed identity (xr_kind/namespace/group).
+// includeOwnerXRLabels adds immediate composing XR labels (owner_xr_*).
+func NewMRCollector(s store.Store, includeXRParentLabels, includeOwnerXRLabels bool) *MRCollector {
+	labels := mrLabelNames(includeXRParentLabels, includeOwnerXRLabels)
 	total, ready, statusSynced, statusReady, created, deletion := newMRDescs(labels)
 	return &MRCollector{
 		store:            s,
 		includeXRParent:  includeXRParentLabels,
+		includeOwnerXR:   includeOwnerXRLabels,
 		totalDesc:        total,
 		readyDesc:        ready,
 		statusSyncedDesc: statusSynced,
@@ -178,6 +175,12 @@ func (c *MRCollector) Collect(ch chan<- prometheus.Metric) {
 			key.XRKind = mr.XRKind
 			key.XRNamespace = mr.XRNamespace
 			key.XRGroup = mr.XRGroup
+		}
+		if c.includeOwnerXR {
+			key.OwnerXRName = mr.OwnerXRName
+			key.OwnerXRKind = mr.OwnerXRKind
+			key.OwnerXRNamespace = mr.OwnerXRNamespace
+			key.OwnerXRGroup = mr.OwnerXRGroup
 		}
 		v, ok := agg[key]
 		if !ok {
@@ -251,19 +254,17 @@ func (c *MRCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *MRCollector) labelValues(key mrAggKey) []string {
+	labels := []string{key.Group, key.Kind, key.Version, key.Namespace, key.Name, key.XRName}
 	if c.includeXRParent {
-		return []string{
-			key.Group, key.Kind, key.Version, key.Namespace, key.Name,
-			key.XRName, key.XRKind, key.XRNamespace, key.XRGroup,
-			key.ClaimName, key.ClaimNS,
-			key.Provider, key.ProviderConfig, key.ExternalName, key.ManagementPolicies,
-			key.Synced, key.Ready, key.Reason, key.Paused, key.Deleting,
-		}
+		labels = append(labels, key.XRKind, key.XRNamespace, key.XRGroup)
 	}
-	return []string{
-		key.Group, key.Kind, key.Version, key.Namespace, key.Name,
-		key.XRName, key.ClaimName, key.ClaimNS,
+	if c.includeOwnerXR {
+		labels = append(labels, key.OwnerXRName, key.OwnerXRKind, key.OwnerXRNamespace, key.OwnerXRGroup)
+	}
+	labels = append(labels,
+		key.ClaimName, key.ClaimNS,
 		key.Provider, key.ProviderConfig, key.ExternalName, key.ManagementPolicies,
 		key.Synced, key.Ready, key.Reason, key.Paused, key.Deleting,
-	}
+	)
+	return labels
 }
