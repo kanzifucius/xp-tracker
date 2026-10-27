@@ -20,7 +20,7 @@ EXPECTED_MRS_MIN=1
 
 CLAIM_LABELS="group kind version namespace creator team claim_name synced ready reason paused deleting"
 XR_LABELS="group kind version namespace name claim_name claim_namespace synced ready reason paused deleting"
-MR_LABELS="group kind version namespace name xr_name claim_name claim_namespace provider provider_config external_name management_policies synced ready reason paused deleting"
+MR_LABELS="group kind version namespace name xr_name xr_kind xr_namespace xr_group claim_name claim_namespace provider provider_config external_name management_policies synced ready reason paused deleting"
 PACKAGE_LABELS="kind name healthy installed"
 # Function from hack/samples/functions.yaml is always applied; Provider may lag on pull.
 EXPECTED_PACKAGES_MIN=1
@@ -242,6 +242,7 @@ assert_inventory() {
   require_values crossplane_packages_total kind "${metrics}" Function
   require_values crossplane_packages_total name "${metrics}" function-patch-and-transform
   require_nonempty_values crossplane_mr_total xr_name "${metrics}"
+  require_nonempty_values crossplane_mr_total xr_kind "${metrics}"
   require_value_substring crossplane_mr_total provider "nop" "${metrics}"
 }
 

@@ -217,6 +217,67 @@ func TestEnrichMRClaims_PrefersNamespacedXR(t *testing.T) {
 	if mrs[0].ClaimName != "claim-b" || mrs[0].ClaimNS != "team-b" {
 		t.Fatalf("expected team-b XR linkage, got %q/%q", mrs[0].ClaimName, mrs[0].ClaimNS)
 	}
+	if mrs[0].XRKind != "XWidget" || mrs[0].XRNamespace != "team-b" || mrs[0].XRGroup != "g1" {
+		t.Fatalf("expected typed XR parent XWidget/team-b/g1, got %q/%q/%q",
+			mrs[0].XRKind, mrs[0].XRNamespace, mrs[0].XRGroup)
+	}
+}
+
+func TestEnrichMRClaims_AmbiguousXRLeavesTypedLabelsEmpty(t *testing.T) {
+	s := New()
+	// Two XR kinds share the same namespace/name — composite label alone is ambiguous.
+	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Namespace: "team-a", Name: "shared", ClaimName: "c1", ClaimNS: "team-a"},
+	})
+	s.ReplaceXRs("g1/v1/xgadgets", []XRInfo{
+		{GVR: "g1/v1/xgadgets", Group: "g1", Kind: "XGadget", Namespace: "team-a", Name: "shared", ClaimName: "c2", ClaimNS: "team-a"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource", Namespace: "team-a", Name: "resource", XRName: "shared"},
+	})
+
+	s.EnrichMRClaims()
+
+	mrs := s.SnapshotMRs()
+	if len(mrs) != 1 {
+		t.Fatalf("expected one MR, got %d", len(mrs))
+	}
+	if mrs[0].XRKind != "" || mrs[0].XRNamespace != "" || mrs[0].XRGroup != "" {
+		t.Fatalf("expected empty typed XR labels when ambiguous, got kind=%q ns=%q group=%q",
+			mrs[0].XRKind, mrs[0].XRNamespace, mrs[0].XRGroup)
+	}
+	if mrs[0].ClaimName != "" || mrs[0].ClaimNS != "" {
+		t.Fatalf("expected no claim enrichment when XR match is ambiguous, got %q/%q",
+			mrs[0].ClaimName, mrs[0].ClaimNS)
+	}
+}
+
+func TestEnrichMRClaims_ClearsStaleTypedLabelsWhenAmbiguous(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{
+		{GVR: "g1/v1/xwidgets", Group: "g1", Kind: "XWidget", Namespace: "team-a", Name: "shared"},
+	})
+	s.ReplaceMRs("nop.crossplane.io/v1alpha1/nopresources", []MRInfo{
+		{GVR: "nop.crossplane.io/v1alpha1/nopresources", Group: "nop.crossplane.io", Kind: "NopResource",
+			Namespace: "team-a", Name: "resource", XRName: "shared",
+			XRKind: "XWidget", XRNamespace: "team-a", XRGroup: "g1"},
+	})
+	s.EnrichMRClaims()
+	if got := s.SnapshotMRs()[0]; got.XRKind != "XWidget" {
+		t.Fatalf("precondition: expected XWidget, got %q", got.XRKind)
+	}
+
+	// Second XR kind with the same name makes the match ambiguous.
+	s.ReplaceXRs("g1/v1/xgadgets", []XRInfo{
+		{GVR: "g1/v1/xgadgets", Group: "g1", Kind: "XGadget", Namespace: "team-a", Name: "shared"},
+	})
+	s.EnrichMRClaims()
+
+	got := s.SnapshotMRs()[0]
+	if got.XRKind != "" || got.XRGroup != "" || got.XRNamespace != "" {
+		t.Fatalf("expected typed labels cleared when ambiguous, got kind=%q ns=%q group=%q",
+			got.XRKind, got.XRNamespace, got.XRGroup)
+	}
 }
 
 func TestReplaceMRs(t *testing.T) {
@@ -288,11 +349,23 @@ func TestEnrichMRClaims(t *testing.T) {
 	if byName["nop-1"].ClaimName != "widget-a" || byName["nop-1"].ClaimNS != "team-alpha" {
 		t.Errorf("nop-1: expected claim widget-a/team-alpha, got %q/%q", byName["nop-1"].ClaimName, byName["nop-1"].ClaimNS)
 	}
+	if byName["nop-1"].XRKind != "XWidget" || byName["nop-1"].XRGroup != "g1" || byName["nop-1"].XRNamespace != "" {
+		t.Errorf("nop-1: expected typed XR XWidget/g1/\"\", got %q/%q/%q",
+			byName["nop-1"].XRKind, byName["nop-1"].XRGroup, byName["nop-1"].XRNamespace)
+	}
 	if byName["nop-2"].ClaimName != "label-claim" || byName["nop-2"].ClaimNS != "label-ns" {
 		t.Errorf("nop-2: expected label-derived claim preserved, got %q/%q", byName["nop-2"].ClaimName, byName["nop-2"].ClaimNS)
 	}
+	if byName["nop-2"].XRKind != "XWidget" || byName["nop-2"].XRGroup != "g1" {
+		t.Errorf("nop-2: expected typed XR even when claim labels set, got kind=%q group=%q",
+			byName["nop-2"].XRKind, byName["nop-2"].XRGroup)
+	}
 	if byName["nop-3"].ClaimName != "" {
 		t.Errorf("nop-3: expected empty claim name, got %q", byName["nop-3"].ClaimName)
+	}
+	if byName["nop-3"].XRKind != "" || byName["nop-3"].XRGroup != "" {
+		t.Errorf("nop-3: expected empty typed XR fields when XR missing, got kind=%q group=%q",
+			byName["nop-3"].XRKind, byName["nop-3"].XRGroup)
 	}
 }
 
