@@ -37,6 +37,10 @@ type Options struct {
 	// MROwnerXRLabels includes owner_xr_name / owner_xr_kind / owner_xr_namespace /
 	// owner_xr_group on MR series. When omitted, defaults to true.
 	MROwnerXRLabels *bool
+	// XRChildInfoMetric emits crossplane_xr_child_info. When omitted, defaults to false.
+	XRChildInfoMetric *bool
+	// MROwnerInfoMetric emits crossplane_mr_owner_info. When omitted, defaults to false.
+	MROwnerInfoMetric *bool
 }
 
 // New creates a new metrics Server.
@@ -46,6 +50,8 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 	includeMRXRParent := true
 	includeXRParent := true
 	includeMROwnerXR := true
+	emitXRChildInfo := false
+	emitMROwnerInfo := false
 	if len(opts) > 0 {
 		if opts[0].MRXRParentLabels != nil {
 			includeMRXRParent = *opts[0].MRXRParentLabels
@@ -56,6 +62,12 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 		if opts[0].MROwnerXRLabels != nil {
 			includeMROwnerXR = *opts[0].MROwnerXRLabels
 		}
+		if opts[0].XRChildInfoMetric != nil {
+			emitXRChildInfo = *opts[0].XRChildInfoMetric
+		}
+		if opts[0].MROwnerInfoMetric != nil {
+			emitMROwnerInfo = *opts[0].MROwnerInfoMetric
+		}
 	}
 
 	registry := prometheus.NewRegistry()
@@ -63,6 +75,9 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 	registry.MustRegister(metrics.NewXRCollector(s, includeXRParent))
 	registry.MustRegister(metrics.NewMRCollector(s, includeMRXRParent, includeMROwnerXR))
 	registry.MustRegister(metrics.NewPackageCollector(s))
+	if emitXRChildInfo || emitMROwnerInfo {
+		registry.MustRegister(metrics.NewRelationshipCollector(s, emitXRChildInfo, emitMROwnerInfo))
+	}
 	metrics.RegisterSelfMetrics(registry)
 
 	srv := &Server{

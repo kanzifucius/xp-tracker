@@ -123,10 +123,14 @@ func run() error {
 	mrXRParent := cfg.MRXRParentLabels
 	xrParent := cfg.XRParentLabels
 	mrOwnerXR := cfg.MROwnerXRLabels
+	xrChildInfo := cfg.XRChildInfoMetric
+	mrOwnerInfo := cfg.MROwnerInfoMetric
 	srv := server.New(cfg.MetricsAddr, s, server.Options{
-		MRXRParentLabels: &mrXRParent,
-		XRParentLabels:   &xrParent,
-		MROwnerXRLabels:  &mrOwnerXR,
+		MRXRParentLabels:  &mrXRParent,
+		XRParentLabels:    &xrParent,
+		MROwnerXRLabels:   &mrOwnerXR,
+		XRChildInfoMetric: &xrChildInfo,
+		MROwnerInfoMetric: &mrOwnerInfo,
 	})
 	go func() {
 		if err := srv.Run(ctx); err != nil {

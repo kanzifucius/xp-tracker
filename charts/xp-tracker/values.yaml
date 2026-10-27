@@ -46,6 +46,8 @@ config:
   # XR_PARENT_LABELS: "true"
   # MR_XR_PARENT_LABELS: "true"
   # MR_OWNER_XR_LABELS: "true"
+  # XR_CHILD_INFO_METRIC: "false"
+  # MR_OWNER_INFO_METRIC: "false"
   # CLAIM_GVRS: ""
   # XR_GVRS: ""
   # STORE_BACKEND: "memory"

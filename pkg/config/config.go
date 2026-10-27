@@ -93,6 +93,15 @@ type Config struct {
 	// the immediate composing XR. Default true.
 	MROwnerXRLabels bool
 
+	// XRChildInfoMetric controls emission of crossplane_xr_child_info edge
+	// series (XR→XR nesting). Default false (opt-in; watch cardinality).
+	XRChildInfoMetric bool
+
+	// MROwnerInfoMetric controls emission of crossplane_mr_owner_info edge
+	// series (MR→XR). Default false; prefer owner_xr_* labels when MR count
+	// is large (~1200+).
+	MROwnerInfoMetric bool
+
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
 
@@ -162,6 +171,8 @@ func Load() (*Config, error) {
 		MRXRParentLabels:         true,
 		XRParentLabels:           true,
 		MROwnerXRLabels:          true,
+		XRChildInfoMetric:        false,
+		MROwnerInfoMetric:        false,
 		PollIntervalSeconds:      defaultPollInterval,
 		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
 		MetricsAddr:              defaultMetricsAddr,
@@ -242,6 +253,26 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid MR_OWNER_XR_LABELS: %w", err)
 		}
 		cfg.MROwnerXRLabels = enabled
+	}
+
+	// Optional: XR_CHILD_INFO_METRIC (default false). Set true/1/yes to emit
+	// crossplane_xr_child_info XR→XR edge series.
+	if v := os.Getenv("XR_CHILD_INFO_METRIC"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid XR_CHILD_INFO_METRIC: %w", err)
+		}
+		cfg.XRChildInfoMetric = enabled
+	}
+
+	// Optional: MR_OWNER_INFO_METRIC (default false). Set true/1/yes to emit
+	// crossplane_mr_owner_info MR→XR edge series (discouraged at large MR counts).
+	if v := os.Getenv("MR_OWNER_INFO_METRIC"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MR_OWNER_INFO_METRIC: %w", err)
+		}
+		cfg.MROwnerInfoMetric = enabled
 	}
 
 	// Optional: MR_GVRS (merged with MRD discovery at startup and on refresh)
