@@ -83,6 +83,11 @@ type Config struct {
 	// XR parent labels (xr_kind, xr_namespace, xr_group). Default true.
 	MRXRParentLabels bool
 
+	// XRParentLabels controls whether crossplane_xr_* series include
+	// parent_kind / parent_name / parent_namespace from XR ownerReferences.
+	// Default true.
+	XRParentLabels bool
+
 	// PollIntervalSeconds is the number of seconds between polling cycles.
 	PollIntervalSeconds int
 
@@ -150,6 +155,7 @@ func Load() (*Config, error) {
 		CompositionLabelKey:      defaultCompositionLabelKey,
 		CompositeLabelKey:        defaultCompositeLabelKey,
 		MRXRParentLabels:         true,
+		XRParentLabels:           true,
 		PollIntervalSeconds:      defaultPollInterval,
 		DiscoveryIntervalSeconds: defaultDiscoveryInterval,
 		MetricsAddr:              defaultMetricsAddr,
@@ -210,6 +216,16 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid MR_XR_PARENT_LABELS: %w", err)
 		}
 		cfg.MRXRParentLabels = enabled
+	}
+
+	// Optional: XR_PARENT_LABELS (default true). Set false/0/no to omit
+	// parent_kind / parent_name / parent_namespace on crossplane_xr_* series.
+	if v := os.Getenv("XR_PARENT_LABELS"); v != "" {
+		enabled, err := parseBoolEnv(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid XR_PARENT_LABELS: %w", err)
+		}
+		cfg.XRParentLabels = enabled
 	}
 
 	// Optional: MR_GVRS (merged with MRD discovery at startup and on refresh)
@@ -354,6 +370,19 @@ func gvrKey(gvr schema.GroupVersionResource) string {
 	return gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
 }
 
+// parseBoolEnv parses a boolean environment value.
+// Accepted true: true, 1, yes. Accepted false: false, 0, no. Case-insensitive.
+func parseBoolEnv(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes":
+		return true, nil
+	case "false", "0", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("want true/false/1/0/yes/no, got %q", v)
+	}
+}
+
 // ParseLogLevel maps a case-insensitive level name to slog.Level.
 // Accepted values: debug, info, warn (or warning), error.
 func ParseLogLevel(raw string) (slog.Level, error) {
@@ -414,19 +443,6 @@ func ParseGVR(s string) (schema.GroupVersionResource, error) {
 		Version:  segments[1],
 		Resource: segments[2],
 	}, nil
-}
-
-// parseBoolEnv parses a boolean environment value.
-// Accepted true: true, 1, yes. Accepted false: false, 0, no. Case-insensitive.
-func parseBoolEnv(v string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "true", "1", "yes":
-		return true, nil
-	case "false", "0", "no":
-		return false, nil
-	default:
-		return false, fmt.Errorf("want true/false/1/0/yes/no, got %q", v)
-	}
 }
 
 // splitAndTrim splits s by comma and trims whitespace from each part,

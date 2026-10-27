@@ -252,6 +252,78 @@ func TestEnrichMRClaims_AmbiguousXRLeavesTypedLabelsEmpty(t *testing.T) {
 	}
 }
 
+func TestEnrichXRParents_ResolvesNamespacedParent(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xapps", []XRInfo{
+		{GVR: "g1/v1/xapps", Group: "g1", Kind: "XApp", Namespace: "team-a", Name: "app-1", UID: "uid-app-1"},
+	})
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1", UID: "uid-net-1",
+			ParentKind: "XApp", ParentName: "app-1", ParentGroup: "g1", ParentUID: "uid-app-1",
+		},
+	})
+
+	s.EnrichXRParents()
+
+	byName := map[string]XRInfo{}
+	for _, xr := range s.SnapshotXRs() {
+		byName[xr.Name] = xr
+	}
+	child := byName["net-1"]
+	if child.ParentKind != "XApp" || child.ParentName != "app-1" || child.ParentNamespace != "team-a" || child.ParentGroup != "g1" || child.ParentUID != "uid-app-1" {
+		t.Fatalf("expected resolved parent XApp/app-1/team-a/g1/uid-app-1, got %q/%q/%q/%q/%q",
+			child.ParentKind, child.ParentName, child.ParentNamespace, child.ParentGroup, child.ParentUID)
+	}
+	root := byName["app-1"]
+	if root.ParentName != "" {
+		t.Fatalf("root should keep empty parent_name, got %q", root.ParentName)
+	}
+}
+
+func TestEnrichXRParents_ClearsMissingParent(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1",
+			ParentKind: "XApp", ParentName: "missing", ParentGroup: "g1", ParentUID: "uid-missing",
+		},
+	})
+	s.EnrichXRParents()
+	got := s.SnapshotXRs()[0]
+	if got.ParentName != "" || got.ParentKind != "" || got.ParentNamespace != "" || got.ParentGroup != "" || got.ParentUID != "" {
+		t.Fatalf("expected parent cleared when missing, got kind=%q name=%q ns=%q group=%q uid=%q",
+			got.ParentKind, got.ParentName, got.ParentNamespace, got.ParentGroup, got.ParentUID)
+	}
+}
+
+func TestEnrichXRParents_RejectsSameNameReplacement(t *testing.T) {
+	s := New()
+	// Parent recreated with the same name but a new UID; child's ownerRef still
+	// points at the deleted owner's UID.
+	s.ReplaceXRs("g1/v1/xapps", []XRInfo{
+		{GVR: "g1/v1/xapps", Group: "g1", Kind: "XApp", Namespace: "team-a", Name: "app-1", UID: "uid-app-new"},
+	})
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1",
+			ParentKind: "XApp", ParentName: "app-1", ParentGroup: "g1", ParentUID: "uid-app-old",
+		},
+	})
+	s.EnrichXRParents()
+	got := s.SnapshotXRs()
+	var child XRInfo
+	for _, xr := range got {
+		if xr.Name == "net-1" {
+			child = xr
+		}
+	}
+	if child.ParentName != "" || child.ParentUID != "" {
+		t.Fatalf("stale owner UID must not attach to same-name replacement, got name=%q uid=%q",
+			child.ParentName, child.ParentUID)
+	}
+}
+
 func TestEnrichMRClaims_ClearsStaleTypedLabelsWhenAmbiguous(t *testing.T) {
 	s := New()
 	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -72,6 +73,7 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		Kind:              obj.GetKind(),
 		Namespace:         obj.GetNamespace(),
 		Name:              obj.GetName(),
+		UID:               string(obj.GetUID()),
 		CreatedAt:         obj.GetCreationTimestamp().Time,
 		ClaimsUnsupported: !xrSupportsClaims(cfg, gvr),
 	}
@@ -94,11 +96,106 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 	xr.Paused = isPaused(obj)
 	xr.DeletedAt = deletionTimestamp(obj)
 
+	// Immediate XR parent from ownerReferences (validated later against inventory).
+	if parent, ok := immediateXROwner(obj.GetOwnerReferences()); ok {
+		xr.ParentKind = parent.Kind
+		xr.ParentName = parent.Name
+		xr.ParentGroup = parent.Group
+		xr.ParentUID = parent.UID
+	}
+
 	// Extract standard Crossplane status conditions.
 	xr.Synced = extractConditionStatus(obj.Object, "Synced")
 	xr.Ready, xr.Reason = extractReadyCondition(obj.Object)
 
 	return xr
+}
+
+// xrOwnerRef is a candidate immediate XR parent from metadata.ownerReferences.
+type xrOwnerRef struct {
+	Group string
+	Kind  string
+	Name  string
+	UID   string
+}
+
+// immediateXROwner selects the immediate XR-typed owner from ownerReferences.
+// Preference: controller:true XR-like ref; else exactly one XR-like ref.
+// Claims and core Kubernetes kinds are ignored. Ambiguous → ok=false.
+// Owner UID is preserved so store enrichment can reject same-name replacements.
+func immediateXROwner(refs []metav1.OwnerReference) (xrOwnerRef, bool) {
+	var candidates []xrOwnerRef
+	var controller *xrOwnerRef
+	for _, ref := range refs {
+		if !isXRLikeOwner(ref) {
+			continue
+		}
+		cand := xrOwnerRef{
+			Group: apiGroupFromAPIVersion(ref.APIVersion),
+			Kind:  ref.Kind,
+			Name:  ref.Name,
+			UID:   string(ref.UID),
+		}
+		candidates = append(candidates, cand)
+		if ref.Controller != nil && *ref.Controller {
+			c := cand
+			controller = &c
+		}
+	}
+	if controller != nil {
+		return *controller, true
+	}
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+	return xrOwnerRef{}, false
+}
+
+// isXRLikeOwner reports whether an ownerRef could be a Crossplane XR parent.
+// Claims stay on claim_* labels and are never treated as parent_*.
+func isXRLikeOwner(ref metav1.OwnerReference) bool {
+	if ref.Name == "" || ref.Kind == "" {
+		return false
+	}
+	if strings.HasSuffix(ref.Kind, "Claim") {
+		return false
+	}
+	group := apiGroupFromAPIVersion(ref.APIVersion)
+	return !isNonXROwnerGroup(group)
+}
+
+func apiGroupFromAPIVersion(apiVersion string) string {
+	if apiVersion == "" {
+		return ""
+	}
+	gv, err := schema.ParseGroupVersion(apiVersion)
+	if err != nil {
+		// Fall back to the substring before "/" when present.
+		if i := strings.IndexByte(apiVersion, '/'); i >= 0 {
+			return apiVersion[:i]
+		}
+		return ""
+	}
+	return gv.Group
+}
+
+// isNonXROwnerGroup lists API groups that are never XR composites.
+func isNonXROwnerGroup(group string) bool {
+	// Empty group covers core resources (apiVersion "v1").
+	switch group {
+	case "":
+		return true
+	case "apps", "batch", "autoscaling", "policy", "rbac.authorization.k8s.io",
+		"networking.k8s.io", "coordination.k8s.io", "admissionregistration.k8s.io",
+		"apiextensions.k8s.io", "storage.k8s.io", "scheduling.k8s.io",
+		"certificates.k8s.io", "discovery.k8s.io", "events.k8s.io",
+		"flowcontrol.apiserver.k8s.io", "node.k8s.io",
+		"pkg.crossplane.io", "apiextensions.crossplane.io",
+		"protection.crossplane.io", "ops.crossplane.io":
+		return true
+	default:
+		return false
+	}
 }
 
 // UnstructuredToMR converts an unstructured Kubernetes object to an MRInfo.

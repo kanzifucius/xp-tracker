@@ -19,7 +19,7 @@ EXPECTED_XGADGETS=4
 EXPECTED_MRS_MIN=1
 
 CLAIM_LABELS="group kind version namespace creator team claim_name synced ready reason paused deleting"
-XR_LABELS="group kind version namespace name claim_name claim_namespace synced ready reason paused deleting"
+XR_LABELS="group kind version namespace name parent_kind parent_name parent_namespace claim_name claim_namespace synced ready reason paused deleting"
 MR_LABELS="group kind version namespace name xr_name xr_kind xr_namespace xr_group claim_name claim_namespace provider provider_config external_name management_policies synced ready reason paused deleting"
 PACKAGE_LABELS="kind name healthy installed"
 # Function from hack/samples/functions.yaml is always applied; Provider may lag on pull.

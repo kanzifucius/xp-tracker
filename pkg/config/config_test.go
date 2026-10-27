@@ -130,6 +130,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if !cfg.MRXRParentLabels {
 		t.Error("expected MRXRParentLabels default true")
 	}
+	if !cfg.XRParentLabels {
+		t.Error("expected XRParentLabels default true")
+	}
 }
 
 func TestLoad_AllOptions(t *testing.T) {
@@ -141,6 +144,7 @@ func TestLoad_AllOptions(t *testing.T) {
 		"TEAM_ANNOTATION_KEY":        "platform.example.org/team",
 		"COMPOSITION_LABEL_KEY":      "custom.io/comp",
 		"MR_XR_PARENT_LABELS":        "false",
+		"XR_PARENT_LABELS":           "false",
 		"POLL_INTERVAL_SECONDS":      "15",
 		"DISCOVERY_INTERVAL_SECONDS": "60",
 		"METRICS_ADDR":               ":9090",
@@ -166,6 +170,9 @@ func TestLoad_AllOptions(t *testing.T) {
 	}
 	if cfg.MRXRParentLabels {
 		t.Error("expected MRXRParentLabels false when MR_XR_PARENT_LABELS=false")
+	}
+	if cfg.XRParentLabels {
+		t.Error("expected XRParentLabels false when XR_PARENT_LABELS=false")
 	}
 	if cfg.PollIntervalSeconds != 15 {
 		t.Errorf("unexpected poll interval: %d", cfg.PollIntervalSeconds)
@@ -196,6 +203,25 @@ func TestLoad_MRXRParentLabels(t *testing.T) {
 		setEnvs(t, map[string]string{"MR_XR_PARENT_LABELS": "maybe"})
 		if _, err := Load(); err == nil {
 			t.Fatal("expected error for invalid MR_XR_PARENT_LABELS")
+		}
+	})
+}
+
+func TestLoad_XRParentLabels(t *testing.T) {
+	t.Run("false", func(t *testing.T) {
+		setEnvs(t, map[string]string{"XR_PARENT_LABELS": "0"})
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.XRParentLabels {
+			t.Error("expected false")
+		}
+	})
+	t.Run("invalid", func(t *testing.T) {
+		setEnvs(t, map[string]string{"XR_PARENT_LABELS": "maybe"})
+		if _, err := Load(); err == nil {
+			t.Fatal("expected error for invalid XR_PARENT_LABELS")
 		}
 	})
 }
@@ -441,6 +467,7 @@ func setEnvs(t *testing.T, envs map[string]string) {
 		"CREATOR_ANNOTATION_KEY", "TEAM_ANNOTATION_KEY",
 		"COMPOSITION_LABEL_KEY", "COMPOSITE_LABEL_KEY",
 		"MR_XR_PARENT_LABELS",
+		"XR_PARENT_LABELS",
 		"POLL_INTERVAL_SECONDS", "DISCOVERY_INTERVAL_SECONDS", "METRICS_ADDR",
 		"LOG_LEVEL",
 		"STORE_BACKEND", "S3_BUCKET", "S3_KEY_PREFIX", "S3_REGION", "S3_ENDPOINT",

@@ -312,6 +312,68 @@ func TestUnstructuredToXR_V2NamespacedCompositionRef(t *testing.T) {
 	}
 }
 
+func TestUnstructuredToXR_ParentFromOwnerReferences(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "platform.example.org", Version: "v1alpha1", Resource: "xnetworks"}
+	cfg := &config.Config{}
+	ctrl := true
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "platform.example.org/v1alpha1",
+		"kind":       "XNetwork",
+		"metadata": map[string]interface{}{
+			"name":      "net-1",
+			"namespace": "team-a",
+		},
+	}}
+	obj.SetOwnerReferences([]metav1.OwnerReference{{
+		APIVersion: "platform.example.org/v1alpha1",
+		Kind:       "XApp",
+		Name:       "app-1",
+		Controller: &ctrl,
+		UID:        "uid-app-1",
+	}})
+
+	xr := UnstructuredToXR(*obj, gvr, cfg)
+	if xr.ParentKind != "XApp" || xr.ParentName != "app-1" || xr.ParentGroup != "platform.example.org" || xr.ParentUID != "uid-app-1" {
+		t.Fatalf("parent: got kind=%q name=%q group=%q uid=%q", xr.ParentKind, xr.ParentName, xr.ParentGroup, xr.ParentUID)
+	}
+	if xr.ParentNamespace != "" {
+		t.Fatalf("ParentNamespace should stay empty until store enrichment, got %q", xr.ParentNamespace)
+	}
+}
+
+func TestUnstructuredToXR_IgnoresClaimOwner(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "platform.example.org", Version: "v1alpha1", Resource: "xapps"}
+	cfg := &config.Config{}
+	ctrl := true
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "platform.example.org/v1alpha1",
+		"kind":       "XApp",
+		"metadata":   map[string]interface{}{"name": "app-1", "namespace": "team-a"},
+	}}
+	obj.SetOwnerReferences([]metav1.OwnerReference{{
+		APIVersion: "platform.example.org/v1alpha1",
+		Kind:       "AppClaim",
+		Name:       "claim-1",
+		Controller: &ctrl,
+		UID:        "uid-claim",
+	}})
+
+	xr := UnstructuredToXR(*obj, gvr, cfg)
+	if xr.ParentName != "" || xr.ParentKind != "" {
+		t.Fatalf("claim owners must not become parent_*, got kind=%q name=%q", xr.ParentKind, xr.ParentName)
+	}
+}
+
+func TestImmediateXROwner_Ambiguous(t *testing.T) {
+	refs := []metav1.OwnerReference{
+		{APIVersion: "platform.example.org/v1alpha1", Kind: "XApp", Name: "a", UID: "1"},
+		{APIVersion: "platform.example.org/v1alpha1", Kind: "XApp", Name: "b", UID: "2"},
+	}
+	if _, ok := immediateXROwner(refs); ok {
+		t.Fatal("expected empty parent when multiple non-controller XR owners")
+	}
+}
+
 func TestUnstructuredToMR_Full(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "nop.crossplane.io", Version: "v1alpha1", Resource: "nopresources"}
 	cfg := &config.Config{

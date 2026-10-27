@@ -14,6 +14,7 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `COMPOSITION_LABEL_KEY` | No | `crossplane.io/composition-name` | Label key on XRs for composition name (internal enrichment only; not exposed as a metric label) |
 | `COMPOSITE_LABEL_KEY` | No | `crossplane.io/composite` | Label key on MRs linking them to a composite (XR) |
 | `MR_XR_PARENT_LABELS` | No | `true` | When true, `crossplane_mr_*` include typed XR parent labels `xr_kind`, `xr_namespace`, `xr_group`. Set `false`/`0`/`no` to omit them |
+| `XR_PARENT_LABELS` | No | `true` | When true, `crossplane_xr_*` include `parent_kind`, `parent_name`, `parent_namespace` from XR `ownerReferences` (validated against inventory). Roots keep empty `parent_name`. Set `false`/`0`/`no` to omit them |
 | `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | No | `300` | Seconds between XRD/MRD re-discovery cycles. `0` disables periodic re-discovery (startup discovery still runs once) |
@@ -112,6 +113,16 @@ Legacy XRs get their claim linkage through a symmetric enrichment when labels ar
 2. Otherwise, xp-tracker finds the claim whose `spec.resourceRef.name` matches the XR name and copies the claim's name and namespace
 
 Native Crossplane v2 XRs have no claims, so their claim metric labels remain empty.
+
+## XR parent labels (XR nesting)
+
+With `XR_PARENT_LABELS=true` (the default), each `crossplane_xr_*` series carries the immediate parent XR from Kubernetes `metadata.ownerReferences`:
+
+1. Prefer the `controller: true` owner whose GVK is XR-like (not a Claim, not a core Kubernetes / Crossplane package type)
+2. Else use a single XR-like owner; multiple non-controller XR owners stay empty (ambiguous)
+3. After the poll cycle, validate the candidate against inventoried XRs and fill `parent_namespace` from the matched parent (empty when the parent is cluster-scoped)
+
+Root XRs emit empty `parent_name` (and empty `parent_kind` / `parent_namespace`). That is the explicit “no parent” signal — dashboards should filter `parent_name=""` for roots rather than inventing sentinels. Claims remain on `claim_*` and are never treated as `parent_*`.
 
 ## Composite label (MRs)
 
