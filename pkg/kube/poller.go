@@ -129,9 +129,11 @@ func (p *Poller) poll(ctx context.Context) {
 		}
 	}
 
-	// Enrich legacy claims from XRs, legacy XRs from claims, and MRs from XRs.
+	// Enrich legacy claims from XRs, legacy XRs from claims, XR parents from
+	// ownerReferences against inventory, and MRs from XRs.
 	p.store.EnrichClaimCompositions()
 	p.store.EnrichXRClaims()
+	p.store.EnrichXRParents()
 	p.store.EnrichMRClaims()
 
 	// Only persist if the entire cycle succeeded. Persisting a partial

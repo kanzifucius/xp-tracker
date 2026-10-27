@@ -252,6 +252,51 @@ func TestEnrichMRClaims_AmbiguousXRLeavesTypedLabelsEmpty(t *testing.T) {
 	}
 }
 
+func TestEnrichXRParents_ResolvesNamespacedParent(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xapps", []XRInfo{
+		{GVR: "g1/v1/xapps", Group: "g1", Kind: "XApp", Namespace: "team-a", Name: "app-1"},
+	})
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1",
+			ParentKind: "XApp", ParentName: "app-1", ParentGroup: "g1",
+		},
+	})
+
+	s.EnrichXRParents()
+
+	byName := map[string]XRInfo{}
+	for _, xr := range s.SnapshotXRs() {
+		byName[xr.Name] = xr
+	}
+	child := byName["net-1"]
+	if child.ParentKind != "XApp" || child.ParentName != "app-1" || child.ParentNamespace != "team-a" || child.ParentGroup != "g1" {
+		t.Fatalf("expected resolved parent XApp/app-1/team-a/g1, got %q/%q/%q/%q",
+			child.ParentKind, child.ParentName, child.ParentNamespace, child.ParentGroup)
+	}
+	root := byName["app-1"]
+	if root.ParentName != "" {
+		t.Fatalf("root should keep empty parent_name, got %q", root.ParentName)
+	}
+}
+
+func TestEnrichXRParents_ClearsMissingParent(t *testing.T) {
+	s := New()
+	s.ReplaceXRs("g1/v1/xnetworks", []XRInfo{
+		{
+			GVR: "g1/v1/xnetworks", Group: "g1", Kind: "XNetwork", Namespace: "team-a", Name: "net-1",
+			ParentKind: "XApp", ParentName: "missing", ParentGroup: "g1",
+		},
+	})
+	s.EnrichXRParents()
+	got := s.SnapshotXRs()[0]
+	if got.ParentName != "" || got.ParentKind != "" || got.ParentNamespace != "" || got.ParentGroup != "" {
+		t.Fatalf("expected parent cleared when missing, got kind=%q name=%q ns=%q group=%q",
+			got.ParentKind, got.ParentName, got.ParentNamespace, got.ParentGroup)
+	}
+}
+
 func TestEnrichMRClaims_ClearsStaleTypedLabelsWhenAmbiguous(t *testing.T) {
 	s := New()
 	s.ReplaceXRs("g1/v1/xwidgets", []XRInfo{

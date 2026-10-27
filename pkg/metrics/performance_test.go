@@ -82,7 +82,7 @@ func TestXRCollector_Performance1000(t *testing.T) {
 	}
 	s.ReplaceXRs("example.org/v1alpha1/xthings", xrs)
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(c)
 

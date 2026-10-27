@@ -121,7 +121,11 @@ func run() error {
 
 	// Start the HTTP metrics server.
 	mrXRParent := cfg.MRXRParentLabels
-	srv := server.New(cfg.MetricsAddr, s, server.Options{MRXRParentLabels: &mrXRParent})
+	xrParent := cfg.XRParentLabels
+	srv := server.New(cfg.MetricsAddr, s, server.Options{
+		MRXRParentLabels: &mrXRParent,
+		XRParentLabels:   &xrParent,
+	})
 	go func() {
 		if err := srv.Run(ctx); err != nil {
 			slog.Error("metrics server error", "error", err)

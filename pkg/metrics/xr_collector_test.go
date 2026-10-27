@@ -11,7 +11,7 @@ import (
 
 func TestXRCollector_Empty(t *testing.T) {
 	s := store.New()
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 
 	families := gatherCollector(t, c)
 	totalFam := families["crossplane_xr_total"]
@@ -41,7 +41,7 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr3", ClaimName: "claim-c", ClaimNS: "ns-b", Composition: "comp-prod", Synced: false, Ready: false, Reason: "Unavailable"},
 	})
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_xr_total"]
@@ -78,6 +78,9 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	assertLabel(t, labels, "version", "v1")
 	assertLabel(t, labels, "namespace", "")
 	assertLabel(t, labels, "name", "xr1")
+	assertLabel(t, labels, "parent_kind", "")
+	assertLabel(t, labels, "parent_name", "")
+	assertLabel(t, labels, "parent_namespace", "")
 	assertLabel(t, labels, "claim_name", "claim-a")
 	assertLabel(t, labels, "claim_namespace", "ns-a")
 	assertLabel(t, labels, "synced", "true")
@@ -85,6 +88,54 @@ func TestXRCollector_SingleComposition(t *testing.T) {
 	assertLabel(t, labels, "reason", "Available")
 	assertLabel(t, labels, "paused", "false")
 	assertLabel(t, labels, "deleting", "false")
+}
+
+func TestXRCollector_ParentLabels(t *testing.T) {
+	s := store.New()
+	s.ReplaceXRs("g/v1/xnets", []store.XRInfo{
+		{
+			GVR: "g/v1/xnets", Group: "g", Version: "v1", Kind: "XNetwork", Namespace: "ns-a", Name: "net-1",
+			ParentKind: "XApp", ParentName: "app-1", ParentNamespace: "ns-a", Synced: true, Ready: true,
+		},
+	})
+
+	c := NewXRCollector(s, true)
+	families := gatherCollector(t, c)
+	totalFam := families["crossplane_xr_total"]
+	if totalFam == nil {
+		t.Fatal("missing crossplane_xr_total")
+	}
+	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "name", "net-1")
+	assertLabel(t, labels, "parent_kind", "XApp")
+	assertLabel(t, labels, "parent_name", "app-1")
+	assertLabel(t, labels, "parent_namespace", "ns-a")
+}
+
+func TestXRCollector_ParentLabelsDisabled(t *testing.T) {
+	s := store.New()
+	s.ReplaceXRs("g/v1/xnets", []store.XRInfo{
+		{
+			GVR: "g/v1/xnets", Group: "g", Version: "v1", Kind: "XNetwork", Name: "net-1",
+			ParentKind: "XApp", ParentName: "app-1", ParentNamespace: "ns-a", Synced: true, Ready: true,
+		},
+	})
+
+	c := NewXRCollector(s, false)
+	families := gatherCollector(t, c)
+	totalFam := families["crossplane_xr_total"]
+	if totalFam == nil {
+		t.Fatal("missing crossplane_xr_total")
+	}
+	labels := findLabelsByLabelValue(t, totalFam.GetMetric(), "name", "net-1")
+	if _, ok := labels["parent_kind"]; ok {
+		t.Fatal("expected parent_kind omitted when XR parent labels disabled")
+	}
+	if _, ok := labels["parent_name"]; ok {
+		t.Fatal("expected parent_name omitted when XR parent labels disabled")
+	}
+	if _, ok := labels["parent_namespace"]; ok {
+		t.Fatal("expected parent_namespace omitted when XR parent labels disabled")
+	}
 }
 
 func TestXRCollector_EnrichedClaimLabels(t *testing.T) {
@@ -97,7 +148,7 @@ func TestXRCollector_EnrichedClaimLabels(t *testing.T) {
 	})
 	s.EnrichXRClaims()
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_xr_total"]
@@ -117,7 +168,7 @@ func TestXRCollector_MultipleCompositions(t *testing.T) {
 		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-b", Composition: "comp-dev", Synced: false, Ready: false},
 	})
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	totalFam := families["crossplane_xr_total"]
@@ -131,7 +182,7 @@ func TestXRCollector_MultipleCompositions(t *testing.T) {
 
 func TestXRCollector_Describe(t *testing.T) {
 	s := store.New()
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 
 	ch := make(chan *prometheus.Desc, 10)
 	c.Describe(ch)
@@ -156,7 +207,7 @@ func TestXRCollector_Timestamps(t *testing.T) {
 		{GVR: "g/v1/xthings", Group: "g", Version: "v1", Kind: "XThing", Name: "xr-dying", Synced: false, Ready: false, CreatedAt: createdAt, DeletedAt: deletedAt},
 	})
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	createdFam := families["crossplane_xr_created_timestamp_seconds"]
@@ -177,7 +228,7 @@ func TestXRCollector_AllReady(t *testing.T) {
 		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp", Synced: true, Ready: true},
 	})
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	var total float64
@@ -201,7 +252,7 @@ func TestXRCollector_NoneReady(t *testing.T) {
 		{GVR: "g/v1/xthings", Group: "g", Kind: "XThing", Name: "xr2", ClaimName: "claim-b", ClaimNS: "ns-a", Composition: "comp", Synced: false, Ready: false},
 	})
 
-	c := NewXRCollector(s)
+	c := NewXRCollector(s, true)
 	families := gatherCollector(t, c)
 
 	var total float64

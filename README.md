@@ -182,6 +182,7 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `COMPOSITION_LABEL_KEY` | no | `crossplane.io/composition-name` | Label key on XRs for composition |
 | `COMPOSITE_LABEL_KEY` | no | `crossplane.io/composite` | Label key on MRs linking them to a composite |
 | `MR_XR_PARENT_LABELS` | no | `true` | Include `xr_kind` / `xr_namespace` / `xr_group` on `crossplane_mr_*` (set `false` to omit) |
+| `XR_PARENT_LABELS` | no | `true` | Include `parent_kind` / `parent_name` / `parent_namespace` on `crossplane_xr_*` from ownerReferences (set `false` to omit) |
 | `MR_GVRS` | no | `""` | Additional MR GVRs merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | no | `300` | Seconds between XRD/MRD re-discovery cycles; `0` disables periodic re-discovery |
@@ -229,7 +230,7 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 | `crossplane_claims_status_ready` | Gauge | same as `crossplane_claims_total` | Per-claim Ready status (1=true, 0=false) |
 | `crossplane_claims_created_timestamp_seconds` | Gauge | same as `crossplane_claims_total` | Unix creation timestamp |
 | `crossplane_claims_deletion_timestamp_seconds` | Gauge | same as `crossplane_claims_total` | Unix deletion timestamp (while deleting) |
-| `crossplane_xr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `claim_name`, `claim_namespace`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of XRs |
+| `crossplane_xr_total` | Gauge | `group`, `kind`, `version`, `namespace`, `name`, `parent_kind`, `parent_name`, `parent_namespace`, `claim_name`, `claim_namespace`, `synced`, `ready`, `reason`, `paused`, `deleting` | Total number of XRs (`parent_*` omitted when `XR_PARENT_LABELS=false`; empty `parent_name` = root) |
 | `crossplane_xr_ready` | Gauge | same as `crossplane_xr_total` | Number of XRs with Ready=True |
 | `crossplane_xr_status_synced` | Gauge | same as `crossplane_xr_total` | Per-XR Synced status (1=true, 0=false) |
 | `crossplane_xr_status_ready` | Gauge | same as `crossplane_xr_total` | Per-XR Ready status (1=true, 0=false) |

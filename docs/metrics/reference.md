@@ -56,6 +56,9 @@ Total number of Crossplane composite resources (XRs), broken down by label tuple
 | `version` | API version from the GVR |
 | `namespace` | Kubernetes namespace; populated for Crossplane v2 namespaced XRs |
 | `name` | XR metadata name |
+| `parent_kind` | Kind of the immediate parent XR from `metadata.ownerReferences` (validated against inventory). Empty for roots. Omitted when `XR_PARENT_LABELS=false` |
+| `parent_name` | Name of the immediate parent XR. Empty for roots (the explicit “no parent” signal). Omitted when `XR_PARENT_LABELS=false` |
+| `parent_namespace` | Namespace of the parent XR when namespaced; empty for cluster-scoped parents and roots. Omitted when `XR_PARENT_LABELS=false` |
 | `claim_name` | Claim name linked to a legacy XR; empty for native v2 XRs |
 | `claim_namespace` | Claim namespace linked to a legacy XR; empty for native v2 XRs |
 | `synced` | Crossplane `Synced` condition status (`true`/`false`) |
@@ -188,7 +191,8 @@ Claim/XR/MR cardinality tracks inventory size plus status labels. Package series
 
 - **Empty labels**: if an annotation key is not configured or the annotation is not present on a resource, the label value is an empty string (`""`).
 - **XR claim linkage**: `claim_name` and `claim_namespace` on legacy XR metrics come from XR labels when present. If those labels are absent, xp-tracker backfills them from the claim whose `spec.resourceRef.name` matches the XR name. Native v2 XRs leave both labels empty — that is expected; claims are uncommon on Crossplane v2.
-- **MR → XR ownership (primary)**: `xr_name` comes from the composite label. With `MR_XR_PARENT_LABELS` enabled (the default), xp-tracker also sets `xr_kind`, `xr_namespace`, and `xr_group` from the backing XR in the store (prefer same namespace, else cluster-scoped). If more than one XR shares that name in the preferred scope (distinct kinds/groups), the typed labels stay empty rather than guessing. Prefer these labels for joins on modern fleets; do not require `claim_*`.
+- **XR → XR nesting (primary)**: with `XR_PARENT_LABELS` enabled (the default), `parent_kind` / `parent_name` / `parent_namespace` come from the child’s `metadata.ownerReferences` (prefer `controller: true`), then validated against the inventoried XR set. Roots emit empty `parent_name` (and empty kind/namespace) — do not invent sentinels. Claim kinds are never treated as `parent_*`. Ambiguous or non-XR owners stay empty rather than guessing. Prefer these labels over kind allowlists or name-suffix heuristics.
+- **MR → XR ownership (composite label)**: `xr_name` comes from the composite label. With `MR_XR_PARENT_LABELS` enabled (the default), xp-tracker also sets `xr_kind`, `xr_namespace`, and `xr_group` from the backing XR in the store (prefer same namespace, else cluster-scoped). If more than one XR shares that name in the preferred scope (distinct kinds/groups), the typed labels stay empty rather than guessing. Prefer these labels for joins on modern fleets; do not require `claim_*`.
 - **MR claim linkage (legacy)**: `claim_name` and `claim_namespace` on MR metrics come from MR labels when present. Otherwise, xp-tracker copies them from the backing XR when that XR has claim fields. Empty on native v2 trees.
 - **MR scope**: only provider MRs with the composite label are tracked.
 - **Composition**: composition is resolved internally for enrichment but is not exposed as a Prometheus label dimension.

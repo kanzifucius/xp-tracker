@@ -10,65 +10,87 @@ import (
 )
 
 var (
-	xrLabels = []string{"group", "kind", "version", "namespace", "name", "claim_name", "claim_namespace", "synced", "ready", "reason", "paused", "deleting"}
+	xrLabelsBase = []string{
+		"group", "kind", "version", "namespace", "name",
+		"claim_name", "claim_namespace",
+		"synced", "ready", "reason", "paused", "deleting",
+	}
 
-	xrTotalDesc = prometheus.NewDesc(
+	// xrLabelsWithParent inserts immediate XR parent labels after identity.
+	xrLabelsWithParent = []string{
+		"group", "kind", "version", "namespace", "name",
+		"parent_kind", "parent_name", "parent_namespace",
+		"claim_name", "claim_namespace",
+		"synced", "ready", "reason", "paused", "deleting",
+	}
+)
+
+func xrLabelNames(includeParent bool) []string {
+	if includeParent {
+		return xrLabelsWithParent
+	}
+	return xrLabelsBase
+}
+
+func newXRDescs(labels []string) (
+	total, ready, statusSynced, statusReady, created, deletion *prometheus.Desc,
+) {
+	total = prometheus.NewDesc(
 		"crossplane_xr_total",
 		"Number of Crossplane composite resources (XRs) by group, kind, namespace, name, and status.",
-		xrLabels,
+		labels,
 		nil,
 	)
-
-	xrReadyDesc = prometheus.NewDesc(
+	ready = prometheus.NewDesc(
 		"crossplane_xr_ready",
 		"Number of Ready Crossplane XRs by group, kind, namespace, name, and status.",
-		xrLabels,
+		labels,
 		nil,
 	)
-
-	xrStatusSyncedDesc = prometheus.NewDesc(
+	statusSynced = prometheus.NewDesc(
 		"crossplane_xr_status_synced",
 		"Synced status for Crossplane XRs (1=true, 0=false).",
-		xrLabels,
+		labels,
 		nil,
 	)
-
-	xrStatusReadyDesc = prometheus.NewDesc(
+	statusReady = prometheus.NewDesc(
 		"crossplane_xr_status_ready",
 		"Ready status for Crossplane XRs (1=true, 0=false).",
-		xrLabels,
+		labels,
 		nil,
 	)
-
-	xrCreatedTimestampDesc = prometheus.NewDesc(
+	created = prometheus.NewDesc(
 		"crossplane_xr_created_timestamp_seconds",
 		"Unix creation timestamp of Crossplane composite resources.",
-		xrLabels,
+		labels,
 		nil,
 	)
-
-	xrDeletionTimestampDesc = prometheus.NewDesc(
+	deletion = prometheus.NewDesc(
 		"crossplane_xr_deletion_timestamp_seconds",
 		"Unix deletion timestamp of Crossplane composite resources (emitted only while deleting).",
-		xrLabels,
+		labels,
 		nil,
 	)
-)
+	return total, ready, statusSynced, statusReady, created, deletion
+}
 
 // xrAggKey is the label tuple used to aggregate XR metrics.
 type xrAggKey struct {
-	Group     string
-	Kind      string
-	Version   string
-	Namespace string
-	Name      string
-	ClaimName string
-	ClaimNS   string
-	Synced    string
-	Ready     string
-	Reason    string
-	Paused    string
-	Deleting  string
+	Group           string
+	Kind            string
+	Version         string
+	Namespace       string
+	Name            string
+	ParentKind      string
+	ParentName      string
+	ParentNamespace string
+	ClaimName       string
+	ClaimNS         string
+	Synced          string
+	Ready           string
+	Reason          string
+	Paused          string
+	Deleting        string
 }
 
 // xrAggVal holds aggregated counts for an XR label tuple.
@@ -82,22 +104,42 @@ type xrAggVal struct {
 
 // XRCollector implements prometheus.Collector for Crossplane composite resources.
 type XRCollector struct {
-	store store.Store
+	store            store.Store
+	includeParent    bool
+	totalDesc        *prometheus.Desc
+	readyDesc        *prometheus.Desc
+	statusSyncedDesc *prometheus.Desc
+	statusReadyDesc  *prometheus.Desc
+	createdDesc      *prometheus.Desc
+	deletionDesc     *prometheus.Desc
 }
 
 // NewXRCollector creates a new XRCollector.
-func NewXRCollector(s store.Store) *XRCollector {
-	return &XRCollector{store: s}
+// When includeParentLabels is true (the default in production config),
+// series include parent_kind, parent_name, and parent_namespace after name.
+func NewXRCollector(s store.Store, includeParentLabels bool) *XRCollector {
+	labels := xrLabelNames(includeParentLabels)
+	total, ready, statusSynced, statusReady, created, deletion := newXRDescs(labels)
+	return &XRCollector{
+		store:            s,
+		includeParent:    includeParentLabels,
+		totalDesc:        total,
+		readyDesc:        ready,
+		statusSyncedDesc: statusSynced,
+		statusReadyDesc:  statusReady,
+		createdDesc:      created,
+		deletionDesc:     deletion,
+	}
 }
 
 // Describe sends the metric descriptors to the channel.
 func (c *XRCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- xrTotalDesc
-	ch <- xrReadyDesc
-	ch <- xrStatusSyncedDesc
-	ch <- xrStatusReadyDesc
-	ch <- xrCreatedTimestampDesc
-	ch <- xrDeletionTimestampDesc
+	ch <- c.totalDesc
+	ch <- c.readyDesc
+	ch <- c.statusSyncedDesc
+	ch <- c.statusReadyDesc
+	ch <- c.createdDesc
+	ch <- c.deletionDesc
 }
 
 // Collect snapshots the store, aggregates by label tuple, and emits gauge metrics.
@@ -120,6 +162,11 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 			Paused:    boolToLabel(xr.Paused),
 			Deleting:  boolToLabel(!xr.DeletedAt.IsZero()),
 		}
+		if c.includeParent {
+			key.ParentKind = xr.ParentKind
+			key.ParentName = xr.ParentName
+			key.ParentNamespace = xr.ParentNamespace
+		}
 		v, ok := agg[key]
 		if !ok {
 			v = &xrAggVal{}
@@ -141,13 +188,24 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for key, val := range agg {
-		labels := []string{
-			key.Group, key.Kind, key.Version, key.Namespace, key.Name, key.ClaimName, key.ClaimNS,
-			key.Synced, key.Ready, key.Reason, key.Paused, key.Deleting,
+		var labels []string
+		if c.includeParent {
+			labels = []string{
+				key.Group, key.Kind, key.Version, key.Namespace, key.Name,
+				key.ParentKind, key.ParentName, key.ParentNamespace,
+				key.ClaimName, key.ClaimNS,
+				key.Synced, key.Ready, key.Reason, key.Paused, key.Deleting,
+			}
+		} else {
+			labels = []string{
+				key.Group, key.Kind, key.Version, key.Namespace, key.Name,
+				key.ClaimName, key.ClaimNS,
+				key.Synced, key.Ready, key.Reason, key.Paused, key.Deleting,
+			}
 		}
 
 		m, err := prometheus.NewConstMetric(
-			xrTotalDesc,
+			c.totalDesc,
 			prometheus.GaugeValue,
 			float64(val.Total),
 			labels...,
@@ -159,7 +217,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- m
 
 		m, err = prometheus.NewConstMetric(
-			xrReadyDesc,
+			c.readyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
 			labels...,
@@ -171,7 +229,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- m
 
 		m, err = prometheus.NewConstMetric(
-			xrStatusSyncedDesc,
+			c.statusSyncedDesc,
 			prometheus.GaugeValue,
 			float64(val.SyncedCount),
 			labels...,
@@ -183,7 +241,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- m
 
 		m, err = prometheus.NewConstMetric(
-			xrStatusReadyDesc,
+			c.statusReadyDesc,
 			prometheus.GaugeValue,
 			float64(val.Ready),
 			labels...,
@@ -196,7 +254,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 
 		if !val.CreatedAt.IsZero() {
 			m, err = prometheus.NewConstMetric(
-				xrCreatedTimestampDesc,
+				c.createdDesc,
 				prometheus.GaugeValue,
 				float64(val.CreatedAt.Unix()),
 				labels...,
@@ -210,7 +268,7 @@ func (c *XRCollector) Collect(ch chan<- prometheus.Metric) {
 
 		if !val.DeletedAt.IsZero() {
 			m, err = prometheus.NewConstMetric(
-				xrDeletionTimestampDesc,
+				c.deletionDesc,
 				prometheus.GaugeValue,
 				float64(val.DeletedAt.Unix()),
 				labels...,

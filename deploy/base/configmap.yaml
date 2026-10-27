@@ -24,6 +24,9 @@ data:
   # Optional: label key on XRs for composition name (internal enrichment only; not a metric label). Default: crossplane.io/composition-name
   # COMPOSITION_LABEL_KEY: "crossplane.io/composition-name"
 
+  # Optional: include parent_kind / parent_name / parent_namespace on crossplane_xr_* from ownerReferences. Default: true
+  # XR_PARENT_LABELS: "true"
+
   # Optional: include typed XR parent labels (xr_kind, xr_namespace, xr_group) on crossplane_mr_* series. Default: true
   # MR_XR_PARENT_LABELS: "true"
 

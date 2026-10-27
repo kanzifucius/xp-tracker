@@ -65,6 +65,7 @@ func (s *S3Store) ReplaceMRs(gvr string, items []MRInfo)           { s.mem.Repla
 func (s *S3Store) ReplacePackages(gvr string, items []PackageInfo) { s.mem.ReplacePackages(gvr, items) }
 func (s *S3Store) EnrichClaimCompositions()                        { s.mem.EnrichClaimCompositions() }
 func (s *S3Store) EnrichXRClaims()                                 { s.mem.EnrichXRClaims() }
+func (s *S3Store) EnrichXRParents()                                { s.mem.EnrichXRParents() }
 func (s *S3Store) EnrichMRClaims()                                 { s.mem.EnrichMRClaims() }
 func (s *S3Store) SnapshotClaims() []ClaimInfo                     { return s.mem.SnapshotClaims() }
 func (s *S3Store) SnapshotXRs() []XRInfo                           { return s.mem.SnapshotXRs() }

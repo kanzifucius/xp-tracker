@@ -115,8 +115,31 @@ sum by (ready)(crossplane_xr_total)
 ### Per-XR status table
 
 ```promql
-max by (name, claim_name, claim_namespace, synced, ready)(crossplane_xr_total)
+max by (name, parent_kind, parent_name, parent_namespace, claim_name, claim_namespace, synced, ready)(crossplane_xr_total)
 ```
+
+### Root XRs only (no parent)
+
+```promql
+sum by (group, kind, namespace, name)(crossplane_xr_total{parent_name=""})
+```
+
+### Child XRs of a parent
+
+```promql
+sum by (kind, name)(
+  crossplane_xr_total{parent_kind="XApp", parent_name="my-app", parent_namespace="default"}
+)
+```
+
+### Nested XR tree by parent
+
+```promql
+sum by (parent_kind, parent_name, parent_namespace, kind)(crossplane_xr_total)
+```
+
+!!! tip
+    Prefer `parent_*` for XR→XR nesting. Avoid hard-coded child-kind allowlists or name-suffix matching — those belong in the exporter, not the dashboard.
 
 ## MR queries
 
