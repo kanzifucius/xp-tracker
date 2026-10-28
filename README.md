@@ -184,6 +184,8 @@ Environment variables are still used for namespace filtering, annotation/label k
 | `MR_XR_PARENT_LABELS` | no | `true` | Include `xr_kind` / `xr_namespace` / `xr_group` on `crossplane_mr_*` (set `false` to omit) |
 | `XR_PARENT_LABELS` | no | `true` | Include `parent_kind` / `parent_name` / `parent_namespace` on `crossplane_xr_*` from ownerReferences (set `false` to omit) |
 | `MR_OWNER_XR_LABELS` | no | `true` | Include `owner_xr_name` / `owner_xr_kind` / `owner_xr_namespace` / `owner_xr_group` on `crossplane_mr_*` (set `false` to omit) |
+| `XR_CHILD_INFO_METRIC` | no | `false` | Emit `crossplane_xr_child_info` XR→XR edge series (opt-in) |
+| `MR_OWNER_INFO_METRIC` | no | `false` | Emit `crossplane_mr_owner_info` MR→XR edge series (opt-in; prefer labels at large MR counts) |
 | `MR_GVRS` | no | `""` | Additional MR GVRs merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | no | `300` | Seconds between XRD/MRD re-discovery cycles; `0` disables periodic re-discovery |

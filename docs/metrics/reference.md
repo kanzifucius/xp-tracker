@@ -140,6 +140,28 @@ Unix creation timestamp for each MR. Same label set as `crossplane_mr_total`. Sk
 
 Unix deletion timestamp for each MR. Same label set as `crossplane_mr_total`. Emitted only while the MR is being deleted.
 
+## Relationship edge metrics (opt-in)
+
+These are **separate series** for node-graph panels. Defaults are **off**. Prefer Phase 1/2 labels (`parent_*`, `owner_xr_*`) for PromQL joins; enable edges only when a panel needs an edge model.
+
+### `crossplane_xr_child_info`
+
+Gauge `1` per nested child XR with a resolved parent. Enabled with `XR_CHILD_INFO_METRIC=true`. Cardinality ≈ number of nested child XRs.
+
+| Label | Description |
+|---|---|
+| `parent_group` / `parent_kind` / `parent_namespace` / `parent_name` | Parent XR identity |
+| `child_group` / `child_kind` / `child_namespace` / `child_name` | Child XR identity |
+
+### `crossplane_mr_owner_info`
+
+Gauge `1` per MR with a resolved immediate owner XR. Enabled with `MR_OWNER_INFO_METRIC=true`. Cardinality ≈ MR count — **discourage** when fleets have ~1200+ MRs; use `owner_xr_*` labels on existing `crossplane_mr_*` series instead.
+
+| Label | Description |
+|---|---|
+| `owner_group` / `owner_kind` / `owner_namespace` / `owner_name` | Immediate owner XR |
+| `mr_group` / `mr_kind` / `mr_namespace` / `mr_name` | Managed resource |
+
 ## Package metrics
 
 Low-cardinality inventory for Crossplane package meta-types: **Provider**, **Configuration**, and **Function**. Package revisions (`*Revision`) are **not** scraped.
