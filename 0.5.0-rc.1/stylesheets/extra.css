@@ -1,0 +1,125 @@
+/* Custom styles for xp-tracker documentation */
+
+/* ============================================
+   Brand colours
+   ============================================ */
+:root {
+  --xp-tracker-purple: #7C3AED;
+  --xp-tracker-purple-light: #A78BFA;
+  --xp-tracker-purple-dark: #5B21B6;
+}
+
+/* ============================================
+   Custom admonition: xp-tracker
+   ============================================ */
+.md-typeset .admonition.xp-tracker,
+.md-typeset details.xp-tracker {
+  border-color: var(--xp-tracker-purple);
+}
+
+.md-typeset .xp-tracker > .admonition-title,
+.md-typeset .xp-tracker > summary {
+  background-color: rgba(124, 58, 237, 0.1);
+}
+
+.md-typeset .xp-tracker > .admonition-title::before,
+.md-typeset .xp-tracker > summary::before {
+  background-color: var(--xp-tracker-purple);
+  -webkit-mask-image: var(--md-admonition-icon--tip);
+          mask-image: var(--md-admonition-icon--tip);
+}
+
+/* ============================================
+   Custom admonition: crossplane
+   ============================================ */
+.md-typeset .admonition.crossplane,
+.md-typeset details.crossplane {
+  border-color: #7C3AED;
+}
+
+.md-typeset .crossplane > .admonition-title,
+.md-typeset .crossplane > summary {
+  background-color: rgba(124, 58, 237, 0.1);
+}
+
+.md-typeset .crossplane > .admonition-title::before,
+.md-typeset .crossplane > summary::before {
+  background-color: #7C3AED;
+  -webkit-mask-image: var(--md-admonition-icon--abstract);
+          mask-image: var(--md-admonition-icon--abstract);
+}
+
+/* ============================================
+   Announcement bar styling
+   ============================================ */
+.md-banner {
+  background-color: var(--xp-tracker-purple);
+  color: white;
+}
+
+.md-banner a {
+  color: white;
+}
+
+.md-banner a:hover {
+  color: var(--xp-tracker-purple-light);
+}
+
+/* ============================================
+   Code block enhancements
+   ============================================ */
+.md-typeset code {
+  border-radius: 4px;
+}
+
+/* ============================================
+   Navigation enhancements
+   ============================================ */
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+/* ============================================
+   Feedback widget styling
+   ============================================ */
+.md-feedback {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* ============================================
+   Status badges
+   ============================================ */
+.md-status--new {
+  background-color: #10B981;
+}
+
+.md-status--deprecated {
+  background-color: #EF4444;
+}
+
+/* ============================================
+   Abbreviation tooltips
+   ============================================ */
+abbr[title] {
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+/* ============================================
+   Outdated version warning
+   ============================================ */
+.md-banner--warning {
+  background-color: #F59E0B;
+  color: #1F2937;
+}
+
+.md-banner--warning a {
+  color: #1F2937;
+  font-weight: 600;
+}
+
+.md-banner--warning a:hover {
+  color: #111827;
+}
