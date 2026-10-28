@@ -41,6 +41,12 @@ type Options struct {
 	XRChildInfoMetric *bool
 	// MROwnerInfoMetric emits crossplane_mr_owner_info. When omitted, defaults to false.
 	MROwnerInfoMetric *bool
+	// ConditionTransitionTimestamps emits Ready lastTransitionTime gauges. Default false.
+	ConditionTransitionTimestamps *bool
+	// ConditionMessageInfo emits Ready condition info metrics. Default false.
+	ConditionMessageInfo *bool
+	// ResourceIdentityLabels adds uid / composition_revision on helper metrics. Default false.
+	ResourceIdentityLabels *bool
 }
 
 // New creates a new metrics Server.
@@ -52,6 +58,9 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 	includeMROwnerXR := true
 	emitXRChildInfo := false
 	emitMROwnerInfo := false
+	emitTransitions := false
+	emitConditionInfo := false
+	includeIdentity := false
 	if len(opts) > 0 {
 		if opts[0].MRXRParentLabels != nil {
 			includeMRXRParent = *opts[0].MRXRParentLabels
@@ -68,6 +77,15 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 		if opts[0].MROwnerInfoMetric != nil {
 			emitMROwnerInfo = *opts[0].MROwnerInfoMetric
 		}
+		if opts[0].ConditionTransitionTimestamps != nil {
+			emitTransitions = *opts[0].ConditionTransitionTimestamps
+		}
+		if opts[0].ConditionMessageInfo != nil {
+			emitConditionInfo = *opts[0].ConditionMessageInfo
+		}
+		if opts[0].ResourceIdentityLabels != nil {
+			includeIdentity = *opts[0].ResourceIdentityLabels
+		}
 	}
 
 	registry := prometheus.NewRegistry()
@@ -77,6 +95,9 @@ func New(addr string, s store.Store, opts ...Options) *Server {
 	registry.MustRegister(metrics.NewPackageCollector(s))
 	if emitXRChildInfo || emitMROwnerInfo {
 		registry.MustRegister(metrics.NewRelationshipCollector(s, emitXRChildInfo, emitMROwnerInfo))
+	}
+	if emitTransitions || emitConditionInfo {
+		registry.MustRegister(metrics.NewHelperCollector(s, emitTransitions, emitConditionInfo, includeIdentity))
 	}
 	metrics.RegisterSelfMetrics(registry)
 

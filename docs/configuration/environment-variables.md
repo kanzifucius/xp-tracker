@@ -18,6 +18,9 @@ All xp-tracker configuration is via environment variables. There are no config f
 | `MR_OWNER_XR_LABELS` | No | `true` | When true, `crossplane_mr_*` include `owner_xr_name`, `owner_xr_kind`, `owner_xr_namespace`, `owner_xr_group` for the immediate composing XR. Set `false`/`0`/`no` to omit them |
 | `XR_CHILD_INFO_METRIC` | No | `false` | When true, emit `crossplane_xr_child_info` XR→XR edge series (node-graph friendly). Opt-in; cardinality ≈ nested child XR count |
 | `MR_OWNER_INFO_METRIC` | No | `false` | When true, emit `crossplane_mr_owner_info` MR→XR edge series. Prefer `owner_xr_*` labels instead when MR count is large (~1200+) |
+| `CONDITION_TRANSITION_TIMESTAMPS` | No | `false` | When true, emit `crossplane_{xr,mr}_ready_last_transition_timestamp_seconds` |
+| `CONDITION_MESSAGE_INFO` | No | `false` | When true, emit `crossplane_{xr,mr}_condition_info` (Ready message truncated to 128 runes). Watch cardinality/PII |
+| `RESOURCE_IDENTITY_LABELS` | No | `false` | When true (and a helper above is on), add `uid` / `composition_revision` labels on those helper metrics |
 | `MR_GVRS` | No | `""` | Additional MR GVRs to poll (`group/version/resource`), merged with MRD discovery |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Seconds between polling cycles |
 | `DISCOVERY_INTERVAL_SECONDS` | No | `300` | Seconds between XRD/MRD re-discovery cycles. `0` disables periodic re-discovery (startup discovery still runs once) |

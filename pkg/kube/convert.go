@@ -104,10 +104,11 @@ func UnstructuredToXR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		xr.ParentUID = parent.UID
 	}
 	xr.ResourceRefs = extractResourceRefs(obj.Object)
+	xr.CompositionRevision = compositionRevision(obj)
 
 	// Extract standard Crossplane status conditions.
 	xr.Synced = extractConditionStatus(obj.Object, "Synced")
-	xr.Ready, xr.Reason = extractReadyCondition(obj.Object)
+	xr.Ready, xr.Reason, xr.ReadyMessage, xr.ReadyLastTransition = extractReadyConditionDetail(obj.Object)
 
 	return xr
 }
@@ -240,8 +241,9 @@ func UnstructuredToMR(obj unstructured.Unstructured, gvr schema.GroupVersionReso
 		mr.OwnerXRUID = owner.UID
 	}
 
+	mr.UID = string(obj.GetUID())
 	mr.Synced = extractConditionStatus(obj.Object, "Synced")
-	mr.Ready, mr.Reason = extractReadyCondition(obj.Object)
+	mr.Ready, mr.Reason, mr.ReadyMessage, mr.ReadyLastTransition = extractReadyConditionDetail(obj.Object)
 
 	return mr
 }
@@ -341,9 +343,15 @@ func UnstructuredToPackage(obj unstructured.Unstructured, gvr schema.GroupVersio
 // extractReadyCondition finds the "Ready" condition in status.conditions and returns
 // (ready bool, reason string).
 func extractReadyCondition(obj map[string]interface{}) (bool, string) {
+	ready, reason, _, _ := extractReadyConditionDetail(obj)
+	return ready, reason
+}
+
+// extractReadyConditionDetail returns Ready status, reason, message, and lastTransitionTime.
+func extractReadyConditionDetail(obj map[string]interface{}) (bool, string, string, time.Time) {
 	conditions, found, err := unstructured.NestedSlice(obj, "status", "conditions")
 	if err != nil || !found {
-		return false, ""
+		return false, "", "", time.Time{}
 	}
 
 	for _, c := range conditions {
@@ -357,10 +365,31 @@ func extractReadyCondition(obj map[string]interface{}) (bool, string) {
 		}
 		status, _ := cond["status"].(string)
 		reason, _ := cond["reason"].(string)
-		return strings.EqualFold(status, "True"), reason
+		message, _ := cond["message"].(string)
+		var transition time.Time
+		if raw, _ := cond["lastTransitionTime"].(string); raw != "" {
+			if t, err := time.Parse(time.RFC3339, raw); err == nil {
+				transition = t
+			} else if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+				transition = t
+			}
+		}
+		return strings.EqualFold(status, "True"), reason, message, transition
 	}
 
-	return false, ""
+	return false, "", "", time.Time{}
+}
+
+func compositionRevision(obj unstructured.Unstructured) string {
+	if labels := obj.GetLabels(); labels != nil {
+		if rev := labels["crossplane.io/composition-revision"]; rev != "" {
+			return rev
+		}
+	}
+	if rev := nestedString(obj.Object, "spec", "crossplane", "compositionRevisionRef", "name"); rev != "" {
+		return rev
+	}
+	return nestedString(obj.Object, "spec", "compositionRevisionRef", "name")
 }
 
 // extractConditionStatus finds a condition type in status.conditions and returns whether its status is True.

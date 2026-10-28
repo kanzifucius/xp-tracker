@@ -30,29 +30,32 @@ type ClaimInfo struct {
 
 // XRInfo holds extracted metadata for a single Crossplane composite resource.
 type XRInfo struct {
-	GVR               string        `json:"gvr"` // "group/version/resource"
-	Group             string        `json:"group"`
-	Version           string        `json:"version"` // API version from the GVR
-	Kind              string        `json:"kind"`
-	Namespace         string        `json:"namespace"` // usually empty for cluster-scoped XRs
-	Name              string        `json:"name"`
-	UID               string        `json:"uid,omitempty"` // metadata.uid — used to validate ownerReferences
-	ClaimName         string        `json:"claimName"`
-	ClaimNS           string        `json:"claimNamespace"`
-	Composition       string        `json:"composition"`
-	ParentKind        string        `json:"parentKind,omitempty"`      // immediate XR owner kind from ownerReferences
-	ParentName        string        `json:"parentName,omitempty"`      // immediate XR owner name; empty for roots
-	ParentNamespace   string        `json:"parentNamespace,omitempty"` // resolved namespaced parent; empty for cluster-scoped / roots
-	ParentGroup       string        `json:"parentGroup,omitempty"`     // API group of parent (internal join / validation)
-	ParentUID         string        `json:"parentUID,omitempty"`       // ownerReference UID — required for parent match
-	ResourceRefs      []ComposedRef `json:"resourceRefs,omitempty"`    // composed children from resourceRefs
-	ClaimsUnsupported bool          `json:"-"`                         // true for modern XRs that cannot be backed by claims
-	Paused            bool          `json:"paused"`                    // crossplane.io/paused annotation
-	Synced            bool          `json:"synced"`
-	Ready             bool          `json:"ready"`
-	Reason            string        `json:"reason"`              // Ready condition reason
-	CreatedAt         time.Time     `json:"createdAt"`           // metadata.creationTimestamp
-	DeletedAt         time.Time     `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+	GVR                 string        `json:"gvr"` // "group/version/resource"
+	Group               string        `json:"group"`
+	Version             string        `json:"version"` // API version from the GVR
+	Kind                string        `json:"kind"`
+	Namespace           string        `json:"namespace"` // usually empty for cluster-scoped XRs
+	Name                string        `json:"name"`
+	UID                 string        `json:"uid,omitempty"` // metadata.uid — used to validate ownerReferences
+	ClaimName           string        `json:"claimName"`
+	ClaimNS             string        `json:"claimNamespace"`
+	Composition         string        `json:"composition"`
+	ParentKind          string        `json:"parentKind,omitempty"`      // immediate XR owner kind from ownerReferences
+	ParentName          string        `json:"parentName,omitempty"`      // immediate XR owner name; empty for roots
+	ParentNamespace     string        `json:"parentNamespace,omitempty"` // resolved namespaced parent; empty for cluster-scoped / roots
+	ParentGroup         string        `json:"parentGroup,omitempty"`     // API group of parent (internal join / validation)
+	ParentUID           string        `json:"parentUID,omitempty"`       // ownerReference UID — required for parent match
+	ResourceRefs        []ComposedRef `json:"resourceRefs,omitempty"`    // composed children from resourceRefs
+	ClaimsUnsupported   bool          `json:"-"`                         // true for modern XRs that cannot be backed by claims
+	Paused              bool          `json:"paused"`                    // crossplane.io/paused annotation
+	Synced              bool          `json:"synced"`
+	Ready               bool          `json:"ready"`
+	Reason              string        `json:"reason"`                        // Ready condition reason
+	ReadyMessage        string        `json:"readyMessage,omitempty"`        // Ready condition message (may be truncated at export)
+	ReadyLastTransition time.Time     `json:"readyLastTransition,omitempty"` // Ready condition lastTransitionTime
+	CompositionRevision string        `json:"compositionRevision,omitempty"` // compositionRevisionRef / label
+	CreatedAt           time.Time     `json:"createdAt"`                     // metadata.creationTimestamp
+	DeletedAt           time.Time     `json:"deletedAt,omitempty"`           // metadata.deletionTimestamp, zero when not deleting
 }
 
 // ComposedRef is a composed child listed on an XR (resourceRefs).
@@ -65,33 +68,36 @@ type ComposedRef struct {
 
 // MRInfo holds extracted metadata for a single Crossplane provider Managed Resource.
 type MRInfo struct {
-	GVR                string    `json:"gvr"`
-	Group              string    `json:"group"`
-	Version            string    `json:"version"` // API version from the GVR
-	Kind               string    `json:"kind"`
-	Namespace          string    `json:"namespace"`
-	Name               string    `json:"name"`
-	XRName             string    `json:"xrName"`                     // crossplane.io/composite label
-	XRKind             string    `json:"xrKind"`                     // enriched from backing XR kind
-	XRNamespace        string    `json:"xrNamespace"`                // enriched from backing XR namespace
-	XRGroup            string    `json:"xrGroup"`                    // enriched from backing XR API group
-	OwnerXRName        string    `json:"ownerXRName,omitempty"`      // immediate composing XR name (ownerRefs / resourceRefs)
-	OwnerXRKind        string    `json:"ownerXRKind,omitempty"`      // immediate composing XR kind
-	OwnerXRNamespace   string    `json:"ownerXRNamespace,omitempty"` // immediate composing XR namespace
-	OwnerXRGroup       string    `json:"ownerXRGroup,omitempty"`     // immediate composing XR API group
-	OwnerXRUID         string    `json:"ownerXRUID,omitempty"`       // ownerReference UID — required for ownerRefs match
-	ClaimName          string    `json:"claimName"`                  // enriched from XR or MR labels (legacy claim path)
-	ClaimNS            string    `json:"claimNamespace"`             // enriched from XR or MR labels (legacy claim path)
-	Provider           string    `json:"provider"`                   // pkg.crossplane.io/package from MRD discovery
-	ProviderConfig     string    `json:"providerConfig"`             // spec.providerConfigRef.name
-	ExternalName       string    `json:"externalName"`               // crossplane.io/external-name annotation
-	ManagementPolicies string    `json:"managementPolicies"`         // joined spec.managementPolicies
-	Paused             bool      `json:"paused"`                     // crossplane.io/paused annotation
-	Synced             bool      `json:"synced"`
-	Ready              bool      `json:"ready"`
-	Reason             string    `json:"reason"`
-	CreatedAt          time.Time `json:"createdAt"`
-	DeletedAt          time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
+	GVR                 string    `json:"gvr"`
+	Group               string    `json:"group"`
+	Version             string    `json:"version"` // API version from the GVR
+	Kind                string    `json:"kind"`
+	Namespace           string    `json:"namespace"`
+	Name                string    `json:"name"`
+	UID                 string    `json:"uid,omitempty"`              // metadata.uid
+	XRName              string    `json:"xrName"`                     // crossplane.io/composite label
+	XRKind              string    `json:"xrKind"`                     // enriched from backing XR kind
+	XRNamespace         string    `json:"xrNamespace"`                // enriched from backing XR namespace
+	XRGroup             string    `json:"xrGroup"`                    // enriched from backing XR API group
+	OwnerXRName         string    `json:"ownerXRName,omitempty"`      // immediate composing XR name (ownerRefs / resourceRefs)
+	OwnerXRKind         string    `json:"ownerXRKind,omitempty"`      // immediate composing XR kind
+	OwnerXRNamespace    string    `json:"ownerXRNamespace,omitempty"` // immediate composing XR namespace
+	OwnerXRGroup        string    `json:"ownerXRGroup,omitempty"`     // immediate composing XR API group
+	OwnerXRUID          string    `json:"ownerXRUID,omitempty"`       // ownerReference UID — required for ownerRefs match
+	ClaimName           string    `json:"claimName"`                  // enriched from XR or MR labels (legacy claim path)
+	ClaimNS             string    `json:"claimNamespace"`             // enriched from XR or MR labels (legacy claim path)
+	Provider            string    `json:"provider"`                   // pkg.crossplane.io/package from MRD discovery
+	ProviderConfig      string    `json:"providerConfig"`             // spec.providerConfigRef.name
+	ExternalName        string    `json:"externalName"`               // crossplane.io/external-name annotation
+	ManagementPolicies  string    `json:"managementPolicies"`         // joined spec.managementPolicies
+	Paused              bool      `json:"paused"`                     // crossplane.io/paused annotation
+	Synced              bool      `json:"synced"`
+	Ready               bool      `json:"ready"`
+	Reason              string    `json:"reason"`
+	ReadyMessage        string    `json:"readyMessage,omitempty"`        // Ready condition message
+	ReadyLastTransition time.Time `json:"readyLastTransition,omitempty"` // Ready condition lastTransitionTime
+	CreatedAt           time.Time `json:"createdAt"`
+	DeletedAt           time.Time `json:"deletedAt,omitempty"` // metadata.deletionTimestamp, zero when not deleting
 }
 
 // PackageInfo holds extracted metadata for a single Crossplane package
