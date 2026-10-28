@@ -205,6 +205,56 @@ sum(crossplane_mr_total) - sum(crossplane_mr_ready)
 sum by (claim_namespace, claim_name)(crossplane_mr_total{claim_name!=""})
 ```
 
+## Relationship edge metrics (opt-in)
+
+Defaults are **off**. Prefer `parent_*` / `owner_xr_*` labels for PromQL joins; enable edges only for node-graph panels.
+
+### XR→XR edges (`XR_CHILD_INFO_METRIC=true`)
+
+```promql
+sum by (parent_kind, parent_name, parent_namespace, child_kind, child_name, child_namespace)(
+  crossplane_xr_child_info
+)
+```
+
+### MR→XR edges (`MR_OWNER_INFO_METRIC=true`)
+
+```promql
+sum by (owner_kind, owner_name, owner_namespace, mr_kind, mr_name, mr_namespace)(
+  crossplane_mr_owner_info
+)
+```
+
+!!! warning
+    `crossplane_mr_owner_info` tracks roughly one series per MR. Prefer `owner_xr_*` on `crossplane_mr_*` when fleets have ~1200+ MRs.
+
+## Dashboard helpers (opt-in)
+
+Defaults are **off**. Enable for stuck-after-ready / recreate-vs-rename panels.
+
+### Ready last transition age (`CONDITION_TRANSITION_TIMESTAMPS=true`)
+
+```promql
+(time() - crossplane_xr_ready_last_transition_timestamp_seconds) > 3600
+  and on(group, kind, namespace, name) crossplane_xr_status_ready == 0
+```
+
+```promql
+(time() - crossplane_mr_ready_last_transition_timestamp_seconds) > 3600
+  and on(group, kind, namespace, name) crossplane_mr_status_ready == 0
+```
+
+### Ready condition message (`CONDITION_MESSAGE_INFO=true`)
+
+```promql
+sum by (group, kind, namespace, name, reason, message)(
+  crossplane_xr_condition_info{type="Ready"}
+)
+```
+
+!!! tip
+    With `RESOURCE_IDENTITY_LABELS=true`, helper series also carry `uid` and (for XRs) `composition_revision` — useful to distinguish recreate vs rename. Treat `message` as potentially high-cardinality / PII.
+
 ## Self-monitoring queries
 
 ### Average poll duration

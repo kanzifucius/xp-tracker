@@ -126,9 +126,9 @@ With `XR_PARENT_LABELS=true` (the default), each `crossplane_xr_*` series carrie
 
 1. Prefer the `controller: true` owner whose GVK is XR-like (not a Claim, not a core Kubernetes / Crossplane package type)
 2. Else use a single XR-like owner; multiple non-controller XR owners stay empty (ambiguous)
-3. After the poll cycle, validate the candidate against inventoried XRs and fill `parent_namespace` from the matched parent (empty when the parent is cluster-scoped)
+3. After the poll cycle, validate the candidate against inventoried XRs by kind/name/group **and** exact ownerReference UID, then fill `parent_namespace` from the matched parent (empty when the parent is cluster-scoped)
 
-Root XRs emit empty `parent_name` (and empty `parent_kind` / `parent_namespace`). That is the explicit “no parent” signal — dashboards should filter `parent_name=""` for roots rather than inventing sentinels. Claims remain on `claim_*` and are never treated as `parent_*`.
+Root XRs emit empty `parent_name` (and empty `parent_kind` / `parent_namespace`). That is the explicit “no parent” signal — dashboards should filter `parent_name=""` for roots rather than inventing sentinels. Claims remain on `claim_*` and are never treated as `parent_*`. Stale owner UIDs (orphaned children after a same-name parent recreate) clear `parent_*` rather than attaching to the replacement.
 
 ## Composite label (MRs)
 
@@ -150,6 +150,27 @@ With `MR_OWNER_XR_LABELS=true` (the default), each `crossplane_mr_*` series carr
 3. Ambiguous matches stay empty — never copy `xr_name` into `owner_xr_name`
 
 In flat trees both families usually agree. In nested trees `xr_name` may name the root while `owner_xr_*` names the intermediate XR.
+
+OwnerRefs matching also requires an exact `OwnerReference.UID` ↔ inventoried XR `metadata.uid` match, so orphaned MRs do not attach to a same-name replacement of a deleted owner. The `resourceRefs` fallback has no UID and stays uniqueness-based.
+
+## Relationship edge metrics (opt-in)
+
+Defaults are **off**. Prefer Phase 1/2 labels (`parent_*`, `owner_xr_*`) for PromQL joins.
+
+| Flag | Metric | Notes |
+|---|---|---|
+| `XR_CHILD_INFO_METRIC` | `crossplane_xr_child_info` | One series per nested child XR with a resolved parent |
+| `MR_OWNER_INFO_METRIC` | `crossplane_mr_owner_info` | One series per MR with a resolved owner — avoid at ~1200+ MRs; use `owner_xr_*` labels instead |
+
+## Dashboard helpers (opt-in)
+
+Defaults are **off**. Enable for stuck-after-ready / recreate-vs-rename panels.
+
+| Flag | Effect |
+|---|---|
+| `CONDITION_TRANSITION_TIMESTAMPS` | Emits `crossplane_{xr,mr}_ready_last_transition_timestamp_seconds` |
+| `CONDITION_MESSAGE_INFO` | Emits `crossplane_{xr,mr}_condition_info` (Ready `message` truncated to 128 runes; treat as potentially high-cardinality / PII) |
+| `RESOURCE_IDENTITY_LABELS` | When a helper above is on, adds `uid` (and XR `composition_revision`) on those helper series only |
 
 ## Deployment via ConfigMap
 

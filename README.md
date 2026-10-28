@@ -248,6 +248,12 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 | `crossplane_mr_status_ready` | Gauge | same as `crossplane_mr_total` | Per-MR Ready status (1=true, 0=false) |
 | `crossplane_mr_created_timestamp_seconds` | Gauge | same as `crossplane_mr_total` | Unix creation timestamp |
 | `crossplane_mr_deletion_timestamp_seconds` | Gauge | same as `crossplane_mr_total` | Unix deletion timestamp (while deleting) |
+| `crossplane_xr_child_info` | Gauge | `parent_*`, `child_*` group/kind/namespace/name | Opt-in XR→XR edge (`XR_CHILD_INFO_METRIC`; default off) |
+| `crossplane_mr_owner_info` | Gauge | `owner_*`, `mr_*` group/kind/namespace/name | Opt-in MR→XR edge (`MR_OWNER_INFO_METRIC`; default off) |
+| `crossplane_xr_ready_last_transition_timestamp_seconds` | Gauge | XR identity (+ optional `uid` / `composition_revision`) | Opt-in Ready `lastTransitionTime` (`CONDITION_TRANSITION_TIMESTAMPS`) |
+| `crossplane_mr_ready_last_transition_timestamp_seconds` | Gauge | MR identity (+ optional `uid`) | Same for MRs |
+| `crossplane_xr_condition_info` | Gauge | identity + `type` / `reason` / `message` | Opt-in Ready condition info (`CONDITION_MESSAGE_INFO`) |
+| `crossplane_mr_condition_info` | Gauge | identity + `type` / `reason` / `message` | Same for MRs |
 
 ### Label details
 
@@ -260,8 +266,10 @@ All metrics are Prometheus **gauges** that are recomputed on each scrape from th
 - **claim_name** -- Claim metadata name (claims); XR/MR claim linkage from labels or enrichment
 - **claim_namespace** -- Claim namespace linked to an XR or MR
 - **name** -- XR or MR metadata name
+- **parent_kind** / **parent_name** / **parent_namespace** -- Immediate parent XR on XR series (default on via `XR_PARENT_LABELS`; empty `parent_name` = root)
 - **xr_name** -- Composite name from the composite label (MRs only); primary XR → MR ownership edge
 - **xr_kind** / **xr_namespace** / **xr_group** -- Typed backing XR identity on MR series (default on; empty until the XR is in the store)
+- **owner_xr_name** / **owner_xr_kind** / **owner_xr_namespace** / **owner_xr_group** -- Immediate composing XR on MR series (default on via `MR_OWNER_XR_LABELS`; distinct from `xr_*`)
 - **provider** / **provider_config** / **external_name** / **management_policies** -- MR provider attribution and cloud identity
 - **synced** / **ready** -- Crossplane condition statuses as labels (`true`/`false`)
 - **reason** -- Ready condition reason (e.g. `Available`, `Creating`)
