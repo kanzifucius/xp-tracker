@@ -212,7 +212,7 @@ Defaults are **off**. Prefer `parent_*` / `owner_xr_*` labels for PromQL joins; 
 ### XR→XR edges (`XR_CHILD_INFO_METRIC=true`)
 
 ```promql
-sum by (parent_kind, parent_name, parent_namespace, child_kind, child_name, child_namespace)(
+sum by (parent_group, parent_kind, parent_name, parent_namespace, child_group, child_kind, child_name, child_namespace)(
   crossplane_xr_child_info
 )
 ```
@@ -220,7 +220,7 @@ sum by (parent_kind, parent_name, parent_namespace, child_kind, child_name, chil
 ### MR→XR edges (`MR_OWNER_INFO_METRIC=true`)
 
 ```promql
-sum by (owner_kind, owner_name, owner_namespace, mr_kind, mr_name, mr_namespace)(
+sum by (owner_group, owner_kind, owner_name, owner_namespace, mr_group, mr_kind, mr_name, mr_namespace)(
   crossplane_mr_owner_info
 )
 ```
@@ -236,12 +236,12 @@ Defaults are **off**. Enable for stuck-after-ready / recreate-vs-rename panels.
 
 ```promql
 (time() - crossplane_xr_ready_last_transition_timestamp_seconds) > 3600
-  and on(group, kind, namespace, name) crossplane_xr_status_ready == 0
+  and on(group, kind, version, namespace, name) crossplane_xr_status_ready == 0
 ```
 
 ```promql
 (time() - crossplane_mr_ready_last_transition_timestamp_seconds) > 3600
-  and on(group, kind, namespace, name) crossplane_mr_status_ready == 0
+  and on(group, kind, version, namespace, name) crossplane_mr_status_ready == 0
 ```
 
 ### Ready condition message (`CONDITION_MESSAGE_INFO=true`)
