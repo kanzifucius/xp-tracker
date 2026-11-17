@@ -14,6 +14,9 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Helm OCI namespace (chart name appended by helm push from Chart.yaml).
+  # Install: oci://ghcr.io/<owner>/charts/xp-tracker
+  CHART_OCI_REGISTRY: oci://ghcr.io/${{ github.repository_owner }}/charts
 
 jobs:
   test:
@@ -107,13 +110,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Chart version and appVersion track the git tag (v-prefix stripped) so
+      # every release/RC publishes oci://ghcr.io/<owner>/charts/xp-tracker:<semver>.
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+
+      - name: Package Helm chart
+        id: chart
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          helm lint charts/xp-tracker
+          helm package charts/xp-tracker \
+            --version "${TAG}" \
+            --app-version "${TAG}" \
+            --destination dist
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "tarball=dist/xp-tracker-${TAG}.tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR (Helm)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login "${{ env.REGISTRY }}" \
+            -u "${{ github.actor }}" --password-stdin
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm push "${{ steps.chart.outputs.tarball }}" "${{ env.CHART_OCI_REGISTRY }}"
+
       # Create the release before SBOM generation so anchore/sbom-action can
-      # attach the SPDX document as a release asset.
+      # attach the SPDX document as a release asset. Include the chart tarball
+      # for air-gapped / offline installs alongside OCI.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-alpha') || contains(github.ref, '-beta') }}
+          files: ${{ steps.chart.outputs.tarball }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0

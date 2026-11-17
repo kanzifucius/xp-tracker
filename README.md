@@ -347,17 +347,21 @@ kubectl apply -k deploy/base
 
 ### Helm chart
 
-The chart at `charts/xp-tracker/` mirrors ServiceAccount, RBAC, ConfigMap, Deployment, and Service from `deploy/base`. Image tags are pinned (defaults to `Chart.appVersion`; empty/`latest` tags are rejected):
+The chart at `charts/xp-tracker/` mirrors ServiceAccount, RBAC, ConfigMap, Deployment, and Service from `deploy/base`. Image tags are pinned (defaults to `Chart.appVersion`; empty/`latest` tags are rejected). Tagged releases publish the chart to GHCR as an OCI artefact:
 
 ```bash
-# Review rendered manifests
-helm template xp-tracker charts/xp-tracker --namespace crossplane-system
+# Install from OCI (recommended)
+helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
+  --version 0.4.0 \
+  --namespace crossplane-system \
+  --create-namespace
 
-# Install
+# Or from a local checkout
+helm template xp-tracker charts/xp-tracker --namespace crossplane-system
 helm upgrade --install xp-tracker charts/xp-tracker \
   --namespace crossplane-system \
   --create-namespace \
-  --set image.tag=v0.4.0
+  --set image.tag=0.4.0
 ```
 
 See [docs/deployment/helm.md](docs/deployment/helm.md) for values, RBAC scoping, and configuration.
@@ -536,7 +540,7 @@ When building locally, `make build` automatically injects the current git tag, c
 
 ## CI/CD
 
-The project uses GitHub Actions for continuous integration and releases. Container images are published to `ghcr.io/kanzifucius/xp-tracker`.
+The project uses GitHub Actions for continuous integration and releases. Container images are published to `ghcr.io/kanzifucius/xp-tracker`. Helm charts are published to `oci://ghcr.io/kanzifucius/charts/xp-tracker`.
 
 ### CI (`.github/workflows/ci.yml`)
 
@@ -554,7 +558,7 @@ Runs on every push to `main` and on pull requests:
 Triggered by pushing a semver tag (`v*`):
 
 1. **Test & Lint** -- Same gate as CI
-2. **Build, Push & Release** -- Builds multi-arch image with embedded version info, pushes to GHCR, creates a GitHub Release, generates an SPDX SBOM (release asset), and attaches provenance + SBOM attestations
+2. **Build, Push & Release** -- Builds multi-arch image with embedded version info, pushes to GHCR, packages and pushes the Helm chart to `oci://ghcr.io/kanzifucius/charts`, creates a GitHub Release (with chart `.tgz` asset), generates an SPDX SBOM (release asset), and attaches provenance + SBOM attestations for the image
 
 **Image tags produced by a release (e.g. `v1.2.3`):**
 
@@ -563,6 +567,8 @@ Triggered by pushing a semver tag (`v*`):
 | `{{version}}` | `1.2.3` |
 | `{{major}}.{{minor}}` | `1.2` |
 | `{{major}}` (if >= 1) | `1` |
+
+**Helm chart OCI tag:** same SemVer as the image (`1.2.3`, or `0.5.0-rc.1` for an RC). Chart `version` and `appVersion` are set from the git tag (leading `v` stripped) at package time.
 
 Pre-release tags (containing `-rc`, `-alpha`, `-beta`) are marked as pre-releases on GitHub.
 
@@ -583,8 +589,9 @@ This triggers the release workflow, which:
 - Runs tests and lint
 - Builds `linux/amd64` + `linux/arm64` images
 - Pushes to `ghcr.io/kanzifucius/xp-tracker:0.1.0` (and `:0.1`)
-- Creates a GitHub Release with auto-generated release notes
-- Attaches an SPDX SBOM and GitHub Artifact Attestations (provenance + SBOM)
+- Packages and pushes the Helm chart to `oci://ghcr.io/kanzifucius/charts/xp-tracker:0.1.0`
+- Creates a GitHub Release with auto-generated release notes and the chart `.tgz`
+- Attaches an SPDX SBOM and GitHub Artifact Attestations (provenance + SBOM) for the image
 
 ## Local Development
 

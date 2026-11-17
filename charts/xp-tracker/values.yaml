@@ -6,6 +6,7 @@ nameOverride: "crossplane-metrics-exporter"
 fullnameOverride: ""
 
 # Container image. Tag must be set (defaults to Chart.appVersion). Do not use :latest.
+# GHCR tags match SemVer without a leading v (e.g. 0.4.0, 0.5.0-rc.1).
 image:
   repository: ghcr.io/kanzifucius/xp-tracker
   # Empty tag falls back to .Chart.AppVersion; set explicitly to pin another release.
