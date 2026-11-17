@@ -26,16 +26,16 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Helm"
 
-    Thin chart wrapping the same resources as `deploy/base`. Image tags are pinned (defaults to `Chart.appVersion`; `:latest` is rejected):
+    Thin chart wrapping the same resources as `deploy/base`. Prefer the OCI chart on GHCR (image tags pinned via `Chart.appVersion`; `:latest` is rejected). Use a `<semver>` published by a `v*` tag after chart OCI publish landed:
 
     ```bash
-    helm upgrade --install xp-tracker charts/xp-tracker \
+    helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
+      --version <semver> \
       --namespace crossplane-system \
-      --create-namespace \
-      --set image.tag=v0.4.0
+      --create-namespace
     ```
 
-    See [Helm deployment](../deployment/helm.md) for values, RBAC, and configuration.
+    From a local checkout use `charts/xp-tracker` instead of the `oci://` URL. See [Helm deployment](../deployment/helm.md) for values, RBAC, and configuration.
 
 === "Kustomize Overlay"
 
@@ -49,7 +49,7 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Build from Source"
 
-    Requires Go 1.26.10+:
+    Requires Go 1.26.11+:
 
     ```bash
     git clone https://github.com/kanzifucius/xp-tracker.git

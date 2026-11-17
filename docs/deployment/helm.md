@@ -6,12 +6,52 @@ ClusterRoleBinding, ConfigMap, Deployment, and Service). It does not change
 exporter behaviour; it only packages those manifests with values for image,
 namespace, and configuration.
 
+Published chart releases are available as OCI artefacts on GHCR:
+
+`oci://ghcr.io/kanzifucius/charts/xp-tracker`
+
+Each git tag `v*` publishes a chart whose **version** is the tag without the
+leading `v`, and whose **appVersion** matches the image tag that release pushed
+(for example `v0.5.0-rc.1` → chart `0.5.0-rc.1` pinning image `0.5.0-rc.1`).
+OCI charts exist only for tags cut **after** the chart-publish workflow landed;
+older releases such as `v0.4.0` have an image but no chart package.
+
 ## Prerequisites
 
-- [Helm](https://helm.sh/) 3.x
+- [Helm](https://helm.sh/) 3.8+ (OCI support)
 - A Kubernetes cluster with Crossplane installed
 - Crossplane CRDs (XRDs) and Compositions deployed
 - `kubectl` with access to the cluster
+
+## Install from OCI (recommended)
+
+Replace `<semver>` with a published chart version from
+[GHCR packages](https://github.com/kanzifucius?tab=packages) or the matching
+GitHub Release (for example `0.5.0` or `0.5.0-rc.2`):
+
+```bash
+helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
+  --version <semver> \
+  --namespace crossplane-system \
+  --create-namespace
+```
+
+Inspect without installing:
+
+```bash
+helm show chart oci://ghcr.io/kanzifucius/charts/xp-tracker --version <semver>
+helm pull oci://ghcr.io/kanzifucius/charts/xp-tracker --version <semver>
+```
+
+There is no `helm repo add` for OCI — use the full `oci://` URL. Chart tarballs
+are also attached to [GitHub Releases](https://github.com/kanzifucius/xp-tracker/releases)
+for offline installs.
+
+If the GHCR package is private, log in first:
+
+```bash
+helm registry login ghcr.io
+```
 
 ## Install from a local checkout
 
@@ -29,20 +69,21 @@ helm upgrade --install xp-tracker charts/xp-tracker \
   --create-namespace
 ```
 
-Pin a specific published image tag (recommended for production):
+Pin a specific published image tag (recommended for production when not using
+the matching OCI chart version):
 
 ```bash
 helm upgrade --install xp-tracker charts/xp-tracker \
   --namespace crossplane-system \
   --create-namespace \
-  --set image.tag=v0.4.0
+  --set image.tag=0.4.0
 ```
 
 ## Image tags
 
 The chart **refuses** an empty or `latest` tag. By default `image.tag` is empty
-and falls back to `Chart.appVersion` (currently a pinned release such as
-`v0.4.0`). Override with `--set image.tag=<release>` when you need another
+and falls back to `Chart.appVersion` (a pinned GHCR tag such as `0.4.0`, without
+a leading `v`). Override with `--set image.tag=<release>` when you need another
 published tag from [GHCR](https://github.com/kanzifucius/xp-tracker/pkgs/container/xp-tracker).
 
 ## Configuration
@@ -58,7 +99,8 @@ config:
 ```
 
 ```bash
-helm upgrade --install xp-tracker charts/xp-tracker \
+helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
+  --version <semver> \
   --namespace crossplane-system \
   --create-namespace \
   --set config.POLL_INTERVAL_SECONDS=60 \
@@ -101,7 +143,7 @@ rbac:
 | Path | Use when |
 |---|---|
 | `deploy/base` + overlays | You already manage manifests with Kustomize |
-| `charts/xp-tracker` | You prefer Helm values / `helm upgrade` |
+| `charts/xp-tracker` or OCI chart | You prefer Helm values / `helm upgrade` |
 
 Both paths deploy the same exporter binary and the same resource kinds. Prefer
 one or the other per environment to avoid duplicate Deployments.

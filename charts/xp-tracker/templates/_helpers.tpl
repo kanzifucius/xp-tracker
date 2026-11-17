@@ -69,7 +69,7 @@ Pinned image reference. Refuses empty/:latest tags.
 {{- define "xp-tracker.image" -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
 {{- if or (eq $tag "") (eq $tag "latest") }}
-{{- fail "image.tag must be a pinned release tag (not empty or 'latest'); set image.tag or Chart.appVersion (e.g. v0.4.0)" }}
+{{- fail "image.tag must be a pinned release tag (not empty or 'latest'); set image.tag or Chart.appVersion (e.g. 0.4.0)" }}
 {{- end }}
 {{- printf "%s:%s" .Values.image.repository $tag }}
 {{- end }}
