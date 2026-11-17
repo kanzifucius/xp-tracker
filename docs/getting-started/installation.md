@@ -26,11 +26,11 @@ Supported architectures: `linux/amd64`, `linux/arm64`.
 
 === "Helm"
 
-    Thin chart wrapping the same resources as `deploy/base`. Prefer the OCI chart on GHCR (image tags pinned via `Chart.appVersion`; `:latest` is rejected):
+    Thin chart wrapping the same resources as `deploy/base`. Prefer the OCI chart on GHCR (image tags pinned via `Chart.appVersion`; `:latest` is rejected). Use a `<semver>` published by a `v*` tag after chart OCI publish landed:
 
     ```bash
     helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
-      --version 0.4.0 \
+      --version <semver> \
       --namespace crossplane-system \
       --create-namespace
     ```

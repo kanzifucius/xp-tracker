@@ -10,8 +10,11 @@ Published chart releases are available as OCI artefacts on GHCR:
 
 `oci://ghcr.io/kanzifucius/charts/xp-tracker`
 
-Each git tag `v*` publishes chart version and `appVersion` equal to the tag
-without the leading `v` (for example `v0.5.0-rc.1` → chart `0.5.0-rc.1`).
+Each git tag `v*` publishes a chart whose **version** is the tag without the
+leading `v`, and whose **appVersion** matches the image tag that release pushed
+(for example `v0.5.0-rc.1` → chart `0.5.0-rc.1` pinning image `0.5.0-rc.1`).
+OCI charts exist only for tags cut **after** the chart-publish workflow landed;
+older releases such as `v0.4.0` have an image but no chart package.
 
 ## Prerequisites
 
@@ -22,18 +25,13 @@ without the leading `v` (for example `v0.5.0-rc.1` → chart `0.5.0-rc.1`).
 
 ## Install from OCI (recommended)
 
-```bash
-helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
-  --version 0.4.0 \
-  --namespace crossplane-system \
-  --create-namespace
-```
-
-RC example (after a pre-release tag has published):
+Replace `<semver>` with a published chart version from
+[GHCR packages](https://github.com/kanzifucius?tab=packages) or the matching
+GitHub Release (for example `0.5.0` or `0.5.0-rc.2`):
 
 ```bash
 helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
-  --version 0.5.0-rc.1 \
+  --version <semver> \
   --namespace crossplane-system \
   --create-namespace
 ```
@@ -41,8 +39,8 @@ helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
 Inspect without installing:
 
 ```bash
-helm show chart oci://ghcr.io/kanzifucius/charts/xp-tracker --version 0.4.0
-helm pull oci://ghcr.io/kanzifucius/charts/xp-tracker --version 0.4.0
+helm show chart oci://ghcr.io/kanzifucius/charts/xp-tracker --version <semver>
+helm pull oci://ghcr.io/kanzifucius/charts/xp-tracker --version <semver>
 ```
 
 There is no `helm repo add` for OCI — use the full `oci://` URL. Chart tarballs
@@ -102,7 +100,7 @@ config:
 
 ```bash
 helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
-  --version 0.4.0 \
+  --version <semver> \
   --namespace crossplane-system \
   --create-namespace \
   --set config.POLL_INTERVAL_SECONDS=60 \

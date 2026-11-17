@@ -350,9 +350,10 @@ kubectl apply -k deploy/base
 The chart at `charts/xp-tracker/` mirrors ServiceAccount, RBAC, ConfigMap, Deployment, and Service from `deploy/base`. Image tags are pinned (defaults to `Chart.appVersion`; empty/`latest` tags are rejected). Tagged releases publish the chart to GHCR as an OCI artefact:
 
 ```bash
-# Install from OCI (recommended)
+# Install from OCI (recommended; use a chart version published by a v* tag
+# after chart OCI publish landed — not older tags such as v0.4.0)
 helm upgrade --install xp-tracker oci://ghcr.io/kanzifucius/charts/xp-tracker \
-  --version 0.4.0 \
+  --version <semver> \
   --namespace crossplane-system \
   --create-namespace
 
@@ -568,7 +569,7 @@ Triggered by pushing a semver tag (`v*`):
 | `{{major}}.{{minor}}` | `1.2` |
 | `{{major}}` (if >= 1) | `1` |
 
-**Helm chart OCI tag:** same SemVer as the image (`1.2.3`, or `0.5.0-rc.1` for an RC). Chart `version` and `appVersion` are set from the git tag (leading `v` stripped) at package time.
+**Helm chart OCI tag:** chart `version` is the git tag without leading `v` (`1.2.3`, or `0.5.0-rc.1` for an RC). Chart `appVersion` matches the image tag from `docker/metadata-action` (same SemVer for normal tags/RCs; build metadata is stripped so the default image tag stays valid).
 
 Pre-release tags (containing `-rc`, `-alpha`, `-beta`) are marked as pre-releases on GitHub.
 

@@ -110,8 +110,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Chart version and appVersion track the git tag (v-prefix stripped) so
-      # every release/RC publishes oci://ghcr.io/<owner>/charts/xp-tracker:<semver>.
+      # Chart version tracks the git tag (v-prefix stripped). appVersion must
+      # match the image tag docker/metadata-action published (no +build metadata).
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
@@ -119,15 +119,20 @@ jobs:
         id: chart
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME#v}"
+          CHART_VERSION="${GITHUB_REF_NAME#v}"
+          APP_VERSION="${{ steps.meta.outputs.version }}"
+          if [ -z "${APP_VERSION}" ]; then
+            echo "steps.meta.outputs.version is empty; cannot set chart appVersion" >&2
+            exit 1
+          fi
           mkdir -p dist
           helm lint charts/xp-tracker
           helm package charts/xp-tracker \
-            --version "${TAG}" \
-            --app-version "${TAG}" \
+            --version "${CHART_VERSION}" \
+            --app-version "${APP_VERSION}" \
             --destination dist
-          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "tarball=dist/xp-tracker-${TAG}.tgz" >> "$GITHUB_OUTPUT"
+          echo "version=${CHART_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tarball=dist/xp-tracker-${CHART_VERSION}.tgz" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR (Helm)
         run: |
