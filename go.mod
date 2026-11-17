@@ -1,6 +1,6 @@
 module github.com/kanzifucius/xp-tracker
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.9
